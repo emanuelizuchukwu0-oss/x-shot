@@ -526,11 +526,10 @@ let recStartTime = 0;
 let recTimerInterval = null;
 let hardwareZoomSupported = false;
 
-// --- FIX: flashSettings and its defaults now exist ---
 let flashSettings = {
-  power: 60,
-  duration: 200,
-  grade: 'cool'
+  power: 100,
+  duration: 250,
+  grade: 'neutral'
 };
 
 
@@ -887,20 +886,23 @@ async function capturePhoto() {
   try {
     let usedTorch = false, usedScreen = false;
 
-    if (flashEnabled) {
-      if (hasTorch) {
-        const ok = await setTorch(true);
-        if (ok) {
-          usedTorch = true;
-          await new Promise(r => setTimeout(r, Math.min(300, flashSettings.duration)));
-        }
-      }
-      if (!usedTorch) {
-        usedScreen = true;
-        flashOverlay.classList.add('on');
-        await new Promise(r => setTimeout(r, Math.max(120, flashSettings.duration)));
-      }
+   if (flashEnabled) {
+  if (hasTorch) {
+    const ok = await setTorch(true);
+    if (ok) {
+      usedTorch = true;
+      // Hold the torch on long enough for the sensor to fully adjust
+      await new Promise(r => setTimeout(r, 500));
     }
+  }
+  if (!usedTorch) {
+    usedScreen = true;
+    flashOverlay.classList.add('on');
+    // Screen flash: hold it long enough to actually light the scene
+    // AND let the sensor's auto-exposure notice the new light
+    await new Promise(r => setTimeout(r, 350));
+  }
+}
 
     // Grab the frame (respecting zoom)
     const vw = video.videoWidth;
@@ -1241,34 +1243,25 @@ function applyFlashToFrame(ctx, w, h) {
   const power = flashSettings.power;
   if (power <= 0) return;
 
-  const factor = 1.0 + (power / 100) * 1.5;   // 0% → 1.0×, 100% → 2.5×
-  const t = power / 100;
+  // Color grade only — brightness comes from the flash itself.
+  // Neutral = no change at all, so the image stays true to the sensor.
+  const t = Math.min(1, power / 100) * 0.5;
 
   let rm = 1, gm = 1, bm = 1;
   if (flashSettings.grade === 'warm') {
-    rm = 1 + 0.08 * t; gm = 1 + 0.02 * t; bm = 1 - 0.08 * t;
+    rm = 1 + 0.05 * t; gm = 1 + 0.01 * t; bm = 1 - 0.05 * t;
   } else if (flashSettings.grade === 'cool') {
-    rm = 1 - 0.05 * t; gm = 1 + 0.01 * t; bm = 1 + 0.08 * t;
+    rm = 1 - 0.03 * t; gm = 1 + 0.005 * t; bm = 1 + 0.05 * t;
+  } else {
+    return;   // neutral → skip entirely, no color change
   }
 
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
-
   for (let i = 0; i < d.length; i += 4) {
-    let r = d[i]     * factor;
-    let g = d[i + 1] * factor;
-    let b = d[i + 2] * factor;
-
-    // Soft highlight rolloff so we don't blow out
-    if (r > 200) r = 200 + (r - 200) * 0.4;
-    if (g > 200) g = 200 + (g - 200) * 0.4;
-    if (b > 200) b = 200 + (b - 200) * 0.4;
-
-    r *= rm; g *= gm; b *= bm;
-
-    d[i]     = Math.max(0, Math.min(255, r));
-    d[i + 1] = Math.max(0, Math.min(255, g));
-    d[i + 2] = Math.max(0, Math.min(255, b));
+    d[i]     = Math.max(0, Math.min(255, d[i]     * rm));
+    d[i + 1] = Math.max(0, Math.min(255, d[i + 1] * gm));
+    d[i + 2] = Math.max(0, Math.min(255, d[i + 2] * bm));
   }
   ctx.putImageData(img, 0, 0);
 }
@@ -1392,6 +1385,8 @@ const contrastVal = document.getElementById('contrastVal');
 function updateAESwitch() {
   aeSwitch.classList.toggle('on', lightingSettings.autoExposure);
 }
+
+
 
 function applyLightingSettings() {
   // Apply manual brightness offset to the camera's exposureCompensation
