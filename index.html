@@ -425,10 +425,6 @@
   </div>
 </div>
 
-<div class="toast hide" id="toast"></div>
-<canvas id="canvas" hidden></canvas>
-
-
 
 <div class="toast hide" id="toast"></div>
 <canvas id="canvas" hidden></canvas>
@@ -537,27 +533,6 @@ let flashSettings = {
   grade: 'cool'
 };
 
-
-// Chrome fires this when CamShot is installable
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();       // Stop Chrome's mini-infobar
-  deferredPrompt = e;       // Save the event for later
-  installPrompt.hidden = false;  // Show our custom banner
-});
-
-// User taps "Install"
-installBtn.addEventListener('click', async () => {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();  // Show Chrome's real install dialog
-  const { outcome } = await deferredPrompt.userChoice;
-  deferredPrompt = null;
-  installPrompt.hidden = true;
-});
-
-// User taps "Not now"
-dismissBtn.addEventListener('click', () => {
-  installPrompt.hidden = true;
-});
 
 function showToast(msg, ms = 1800) {
   toast.textContent = msg;
