@@ -346,11 +346,7 @@
 }
 #installBtn { background: #ffb800; color: #000; }
 #dismissBtn { background: rgba(255,255,255,0.1); color: #fff; }
-.flash-overlay {
-  position: fixed; inset: 0; background: #fff; opacity: 0;
-  pointer-events: none; z-index: 50; transition: opacity .06s;
-}
-.flash-overlay.on { opacity: 0.7; }   /* was 1 — 0.7 is plenty */
+
 </style>
 </head>
 <body>
@@ -730,38 +726,56 @@ function sharpen(ctx, w, h, amount = 0.8, radius = 1) {
   ctx.putImageData(src, 0, 0);
 }
 
-function autoToneMap(ctx, w, h, shadowLift = 0.25, highlightCompress = 0.75, flashActive = false) {
+// ---- SINGLE TONE MAP: auto-levels + shadow lift in one LUT ----
+// Analyzes the image, finds what range the pixels actually occupy,
+// stretches that range across 0-255, then lifts shadows gently.
+// This is the "correct" way to fix a dark image — it doesn't blow out.
+function autoToneMap(ctx, w, h, shadowLift = 0.25, highlightCompress = 0.75) {
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
 
-  // Measure brightness first
+  // 0. Measure current average brightness — decides which path we take
   let sum = 0, count = 0;
   for (let i = 0; i < d.length; i += 32) {
     sum += 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
     count++;
   }
-  const avg = sum / count;
+  const avg = sum / count;   // 0..255
 
   const lut = new Uint8ClampedArray(256);
 
-  // If flash fired, use a MUCH higher threshold so bright scenes don't stretch.
-  // Flash already lights the scene — we don't need to brighten anything.
-  const brightThreshold = flashActive ? 90 : 120;
+  if (avg > 120) {
+    // ============================================
+    // BRIGHT SCENE — don't stretch, just recover highlights
+    // ============================================
+    // severity ramps 0 → 1 as avg goes from 120 → 200
+    const severity = Math.min(1, (avg - 120) / 80);
 
-  if (avg > brightThreshold) {
-    // Bright — only highlight recovery
-    const severity = Math.min(1, (avg - brightThreshold) / 80);
-    const pull = 0.35 + severity * 0.4;
-    const globalDrop = severity * 0.1;
+    // How hard to compress highlights: 0.3 (mild) → 0.7 (strong)
+    const pull = 0.3 + severity * 0.4;
+
+    // Overall brightness drop so a blown image isn't blindingly white
+    const globalDrop = severity * 0.08;   // up to -8%
 
     for (let v = 0; v < 256; v++) {
       let x = v / 255;
+
+      // Global pull — reduces overall brightness slightly
       x = Math.max(0, x - globalDrop);
-      if (x > 0.82) x = 0.82 + (x - 0.82) * (1 - pull);
+
+      // Highlight shoulder — compress everything above 0.85
+      if (x > 0.85) {
+        x = 0.85 + (x - 0.85) * (1 - pull);
+      }
+
       lut[v] = Math.max(0, Math.min(255, x * 255));
     }
   } else {
-    // Dark scene — stretch, but gently when flash is active
+    // ============================================
+    // DARK / NORMAL SCENE — full auto-levels stretch
+    // ============================================
+
+    // 1. Find the actual luminance range (2nd percentile → 98th percentile)
     const hist = new Uint32Array(256);
     for (let i = 0; i < d.length; i += 16) {
       const lum = (0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2]) | 0;
@@ -769,27 +783,49 @@ function autoToneMap(ctx, w, h, shadowLift = 0.25, highlightCompress = 0.75, fla
     }
     let total = 0;
     for (let i = 0; i < 256; i++) total += hist[i];
+
     let cum = 0, lo = 0, hi = 255;
-    for (let i = 0; i < 256; i++) { cum += hist[i]; if (cum >= total * 0.02) { lo = i; break; } }
+    for (let i = 0; i < 256; i++) {
+      cum += hist[i];
+      if (cum >= total * 0.02) { lo = i; break; }
+    }
     cum = 0;
-    for (let i = 255; i >= 0; i--) { cum += hist[i]; if (cum >= total * 0.02) { hi = i; break; } }
+    for (let i = 255; i >= 0; i--) {
+      cum += hist[i];
+      if (cum >= total * 0.02) { hi = i; break; }
+    }
+
+    // Prevent degenerate ranges (very flat images)
     if (hi - lo < 20) { lo = 0; hi = 255; }
 
-    const effShadowLift = flashActive ? shadowLift * 0.3 : shadowLift;
-
+    // 2. Build LUT: stretch [lo, hi] → [0, 1], lift shadows, compress highlights
     for (let v = 0; v < 256; v++) {
       let x = (v - lo) / (hi - lo);
       x = Math.max(0, Math.min(1, x));
-      if (x < 0.35) x = x + (0.35 - x) * effShadowLift;
-      if (x > 0.85) x = 0.85 + (x - 0.85) * highlightCompress;
+
+      // Shadow lift on the stretched range
+      if (x < 0.35) {
+        x = x + (0.35 - x) * shadowLift;
+      }
+
+      // Highlight compression — soft rolloff so nothing snaps to white
+      if (x > 0.85) {
+        x = 0.85 + (x - 0.85) * highlightCompress;
+      }
+
+      // Tiny S-curve for punch
       const s = x * x * (3 - 2 * x);
-      x = x * 0.8 + s * 0.2;
+      x = x * 0.75 + s * 0.25;
+
       lut[v] = Math.max(0, Math.min(255, x * 255));
     }
   }
 
+  // 3. Apply LUT to every pixel
   for (let i = 0; i < d.length; i += 4) {
-    d[i] = lut[d[i]]; d[i+1] = lut[d[i+1]]; d[i+2] = lut[d[i+2]];
+    d[i]     = lut[d[i]];
+    d[i + 1] = lut[d[i + 1]];
+    d[i + 2] = lut[d[i + 2]];
   }
   ctx.putImageData(img, 0, 0);
 }
@@ -809,7 +845,7 @@ function localContrast(ctx, w, h, amount = 0.2, radius = 6) {
 }
 
 // ---- MASTER CLARITY PASS ----
-function makeClearer(ctx, w, h, flashActive = false) {
+function makeClearer(ctx, w, h) {
   const MAX_DIM = 1920;
   if (Math.max(w, h) > MAX_DIM) {
     const scale = MAX_DIM / Math.max(w, h);
@@ -824,21 +860,20 @@ function makeClearer(ctx, w, h, flashActive = false) {
     w = nw; h = nh;
   }
 
-  // 1. Kill grain (lighter when flash is on — flash already fights noise)
-  killGrain(ctx, w, h, flashActive ? 0.5 : 0.9);
+  // 1. Kill grain
+  killGrain(ctx, w, h, 0.9);
 
-  // 2. Tone map — pass a "flash mode" hint so it doesn't over-brighten
-  autoToneMap(ctx, w, h, flashActive ? 0.05 : 0.25, 0.75, flashActive);
+  // 2. Auto tone map — brightens AND fixes contrast in one shot
+  autoToneMap(ctx, w, h, 0.25, 0.7);
 
-  // 3. Local contrast
-  const userContrast = (typeof lightingSettings !== 'undefined' && lightingSettings?.contrast) || 1;
-  const contrastAmount = (flashActive ? 0.1 : 0.2) * userContrast;
+    // 3. Light local contrast for shape (scaled by user's contrast setting)
+  const userContrast = lightingSettings?.contrast ?? 1;
+  const contrastAmount = 0.2 * userContrast;
   localContrast(ctx, w, h, contrastAmount, 6);
 
   // 4. Sharpen
   sharpen(ctx, w, h, 0.8, 1);
 }
-
 /* ============================================================
    CAPTURE — PHOTO / PORTRAIT
    ============================================================ */
@@ -860,13 +895,11 @@ async function capturePhoto() {
           await new Promise(r => setTimeout(r, Math.min(300, flashSettings.duration)));
         }
       }
-if (!usedTorch) {
-  usedScreen = true;
-  flashOverlay.classList.add('on');
-  // Hold the flash for a much shorter time — 60-120ms is enough
-  // to light the scene without washing out the capture
-  await new Promise(r => setTimeout(r, Math.min(120, flashSettings.duration)));
-}
+      if (!usedTorch) {
+        usedScreen = true;
+        flashOverlay.classList.add('on');
+        await new Promise(r => setTimeout(r, Math.max(120, flashSettings.duration)));
+      }
     }
 
     // Grab the frame (respecting zoom)
@@ -892,7 +925,7 @@ if (!usedTorch) {
     if (usedScreen) setTimeout(() => flashOverlay.classList.remove('on'), 120);
 
     // Pipeline
-   try { makeClearer(ctx, canvas.width, canvas.height, flashEnabled); }
+    try { makeClearer(ctx, canvas.width, canvas.height); }
     catch (e) { console.warn('Clarity failed', e); }
 
     if (flashEnabled) {
@@ -1147,10 +1180,9 @@ function sampleSceneBrightness() {
 
 async function tuneExposure() {
   if (!track || !autoExposureEnabled) return;
-  if (flashEnabled) return;   // <-- ADD THIS LINE
   const caps = track.getCapabilities?.() || {};
   if (!caps.exposureCompensation) return;
- 
+
   const brightness = sampleSceneBrightness();
   if (brightness === null) return;
 
@@ -1206,30 +1238,37 @@ function stopAutoExposure() {
 }
 
 function applyFlashToFrame(ctx, w, h) {
-  // Only apply color grade — brightness is handled by the flash itself.
-  // Multiplying brightness here is what caused the over-bright look.
   const power = flashSettings.power;
   if (power <= 0) return;
 
-  const t = Math.min(1, power / 100) * 0.5;   // halved — grade is subtle
+  const factor = 1.0 + (power / 100) * 1.5;   // 0% → 1.0×, 100% → 2.5×
+  const t = power / 100;
 
   let rm = 1, gm = 1, bm = 1;
   if (flashSettings.grade === 'warm') {
-    rm = 1 + 0.06 * t; gm = 1 + 0.01 * t; bm = 1 - 0.06 * t;
+    rm = 1 + 0.08 * t; gm = 1 + 0.02 * t; bm = 1 - 0.08 * t;
   } else if (flashSettings.grade === 'cool') {
-    rm = 1 - 0.04 * t; gm = 1 + 0.005 * t; bm = 1 + 0.06 * t;
+    rm = 1 - 0.05 * t; gm = 1 + 0.01 * t; bm = 1 + 0.08 * t;
   }
-  // neutral → no change at all
-
-  if (rm === 1 && gm === 1 && bm === 1) return;   // skip work if neutral
 
   const img = ctx.getImageData(0, 0, w, h);
   const d = img.data;
 
   for (let i = 0; i < d.length; i += 4) {
-    d[i]     = Math.max(0, Math.min(255, d[i]     * rm));
-    d[i + 1] = Math.max(0, Math.min(255, d[i + 1] * gm));
-    d[i + 2] = Math.max(0, Math.min(255, d[i + 2] * bm));
+    let r = d[i]     * factor;
+    let g = d[i + 1] * factor;
+    let b = d[i + 2] * factor;
+
+    // Soft highlight rolloff so we don't blow out
+    if (r > 200) r = 200 + (r - 200) * 0.4;
+    if (g > 200) g = 200 + (g - 200) * 0.4;
+    if (b > 200) b = 200 + (b - 200) * 0.4;
+
+    r *= rm; g *= gm; b *= bm;
+
+    d[i]     = Math.max(0, Math.min(255, r));
+    d[i + 1] = Math.max(0, Math.min(255, g));
+    d[i + 2] = Math.max(0, Math.min(255, b));
   }
   ctx.putImageData(img, 0, 0);
 }
