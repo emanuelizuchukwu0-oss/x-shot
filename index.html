@@ -491,41 +491,7 @@ dismissBtn.addEventListener('click', (e) => {
   deferredPrompt = null;
 });
 
-// --- Install button ---
-async function handleInstall(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  console.log('Install clicked, deferredPrompt =', !!deferredPrompt);
 
-  if (!deferredPrompt) {
-    showToast('Install not available — try Chrome menu → Install app');
-    return;
-  }
-
-  try {
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    console.log('Install outcome:', outcome);
-    deferredPrompt = null;
-    installPrompt.hidden = true;
-  } catch (err) {
-    console.error('Install failed:', err);
-    showToast('Install failed: ' + err.message);
-  }
-}
-
-installBtn.addEventListener('pointerdown', handleInstall);
-installBtn.addEventListener('click', handleInstall);
-
-// --- Dismiss button ---
-function handleDismiss(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  installPrompt.hidden = true;
-}
-
-dismissBtn.addEventListener('pointerdown', handleDismiss);
-dismissBtn.addEventListener('click', handleDismiss);
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
