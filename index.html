@@ -1329,8 +1329,9 @@ modes.forEach(m => {
 flashToggle.addEventListener('click', async () => {
   flashEnabled = !flashEnabled;
   updateFlashUI();
+
   if (!flashEnabled) {
-    if (hasTorch) await setTorch(false);
+    if (track && hasTorch) await setTorch(false);
     if (flashOverlay.classList.contains('on')) {
       flashOverlay.classList.remove('on');
       flashOverlay.style.opacity = '';
@@ -1338,15 +1339,20 @@ flashToggle.addEventListener('click', async () => {
     }
     return;
   }
-  if (!hasTorch) {
-    showToast('No hardware flash — screen flash will be used');
-  } else if (mode === 'video') {
-    await setTorch(true);
+
+  // Re-check torch capability — some phones only report it after
+  // the camera has been running for a moment
+  if (track) {
+    const caps = track.getCapabilities?.() || {};
+    hasTorch = !!caps.torch;
+  }
+
+  if (hasTorch) {
+    showToast(`Flash on · torch ready`);
   } else {
-    showToast(`Flash on · ${flashSettings.power}%`);
+    showToast('No hardware torch — screen flash will be used');
   }
 });
-
 flip.addEventListener('click', async () => {
   if (isRecording) stopRecording();
   facingMode = facingMode === 'user' ? 'environment' : 'user';
