@@ -323,12 +323,16 @@
   padding: 12px 16px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  z-index: 500;
-  display: flex;
+  z-index: 9999;
+  display: none;
   align-items: center;
   gap: 10px;
   font-size: 13px;
   max-width: 90vw;
+  pointer-events: auto;
+}
+.install-prompt.show {
+  display: flex;
 }
 .install-prompt button {
   padding: 8px 14px;
@@ -429,15 +433,14 @@
 <div class="toast hide" id="toast"></div>
 <canvas id="canvas" hidden></canvas>
 
-<div class="install-prompt" id="installPrompt" hidden>
-  <span>Install CamShot as an app?</span>
+<div class="install-prompt" id="installPrompt">  <span>Install CamShot as an app?</span>
   <button id="installBtn">Install</button>
   <button id="dismissBtn">Not now</button>
 </div>
 
 <script>
 
- /* ============================================================
+/* ============================================================
    INSTALL PROMPT
    ============================================================ */
 let deferredPrompt = null;
@@ -445,20 +448,47 @@ const installPrompt = document.getElementById('installPrompt');
 const installBtn = document.getElementById('installBtn');
 const dismissBtn = document.getElementById('dismissBtn');
 
-// Show our banner when Chrome says the app is installable
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
-  installPrompt.removeAttribute('hidden');
-  installPrompt.hidden = false;
+  installPrompt.classList.add('show');
   console.log('Install prompt available');
 });
 
-// Hide banner if the app is already installed
 window.addEventListener('appinstalled', () => {
-  installPrompt.hidden = true;
+  installPrompt.classList.remove('show');
   deferredPrompt = null;
   showToast('CamShot installed 🎉');
+});
+
+installBtn.addEventListener('click', async (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  console.log('Install clicked, deferredPrompt =', !!deferredPrompt);
+
+  if (!deferredPrompt) {
+    showToast('Install not available — use Chrome menu → Install app');
+    return;
+  }
+
+  try {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log('Install outcome:', outcome);
+    deferredPrompt = null;
+    installPrompt.classList.remove('show');
+  } catch (err) {
+    console.error('Install failed:', err);
+    showToast('Install failed: ' + err.message);
+  }
+});
+
+dismissBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  console.log('Dismiss clicked');
+  installPrompt.classList.remove('show');
+  deferredPrompt = null;
 });
 
 // --- Install button ---
