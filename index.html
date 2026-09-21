@@ -437,8 +437,12 @@
   <button id="installBtn">Install</button>
   <button id="dismissBtn">Not now</button>
 </div>
+ 
+ <script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js');
+  }
 
-<script>
 
 /* ============================================================
    INSTALL PROMPT
