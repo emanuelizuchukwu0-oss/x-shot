@@ -313,6 +313,33 @@
   background: rgba(255,255,255,.1); color: #fff;
 }
 .settings-btn.done { background: #ffb800; color: #000; }
+.install-prompt {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 20, 22, 0.95);
+  backdrop-filter: blur(12px);
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  max-width: 90vw;
+}
+.install-prompt button {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+#installBtn { background: #ffb800; color: #000; }
+#dismissBtn { background: rgba(255,255,255,0.1); color: #fff; }
 </style>
 </head>
 <body>
@@ -403,7 +430,17 @@
 <div class="toast hide" id="toast"></div>
 <canvas id="canvas" hidden></canvas>
 
+<div class="install-prompt" id="installPrompt" hidden>
+  <span>Install CamShot as an app?</span>
+  <button id="installBtn">Install</button>
+  <button id="dismissBtn">Not now</button>
+</div>
+
 <script>
+
+  if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const shutter = document.getElementById('shutter');
@@ -439,6 +476,32 @@ let flashSettings = {
   duration: 200,
   grade: 'cool'
 };
+
+let deferredPrompt = null;
+const installPrompt = document.getElementById('installPrompt');
+const installBtn = document.getElementById('installBtn');
+const dismissBtn = document.getElementById('dismissBtn');
+
+// Chrome fires this when CamShot is installable
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();       // Stop Chrome's mini-infobar
+  deferredPrompt = e;       // Save the event for later
+  installPrompt.hidden = false;  // Show our custom banner
+});
+
+// User taps "Install"
+installBtn.addEventListener('click', async () => {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();  // Show Chrome's real install dialog
+  const { outcome } = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  installPrompt.hidden = true;
+});
+
+// User taps "Not now"
+dismissBtn.addEventListener('click', () => {
+  installPrompt.hidden = true;
+});
 
 function showToast(msg, ms = 1800) {
   toast.textContent = msg;
