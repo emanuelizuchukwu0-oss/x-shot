@@ -337,9 +337,12 @@
   font-weight: 700;
   font-size: 12px;
   cursor: pointer;
+  touch-action: manipulation;    /* <-- add this */
+  -webkit-user-select: none;
 }
 #installBtn { background: #ffb800; color: #000; }
 #dismissBtn { background: rgba(255,255,255,0.1); color: #fff; }
+
 </style>
 </head>
 <body>
@@ -438,9 +441,66 @@
 
 <script>
 
-  if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js');
+ /* ============================================================
+   INSTALL PROMPT
+   ============================================================ */
+let deferredPrompt = null;
+const installPrompt = document.getElementById('installPrompt');
+const installBtn = document.getElementById('installBtn');
+const dismissBtn = document.getElementById('dismissBtn');
+
+// Show our banner when Chrome says the app is installable
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installPrompt.removeAttribute('hidden');
+  installPrompt.hidden = false;
+  console.log('Install prompt available');
+});
+
+// Hide banner if the app is already installed
+window.addEventListener('appinstalled', () => {
+  installPrompt.hidden = true;
+  deferredPrompt = null;
+  showToast('CamShot installed 🎉');
+});
+
+// --- Install button ---
+async function handleInstall(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  console.log('Install clicked, deferredPrompt =', !!deferredPrompt);
+
+  if (!deferredPrompt) {
+    showToast('Install not available — try Chrome menu → Install app');
+    return;
+  }
+
+  try {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log('Install outcome:', outcome);
+    deferredPrompt = null;
+    installPrompt.hidden = true;
+  } catch (err) {
+    console.error('Install failed:', err);
+    showToast('Install failed: ' + err.message);
+  }
 }
+
+installBtn.addEventListener('pointerdown', handleInstall);
+installBtn.addEventListener('click', handleInstall);
+
+// --- Dismiss button ---
+function handleDismiss(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  installPrompt.hidden = true;
+}
+
+dismissBtn.addEventListener('pointerdown', handleDismiss);
+dismissBtn.addEventListener('click', handleDismiss);
+
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const shutter = document.getElementById('shutter');
@@ -477,10 +537,6 @@ let flashSettings = {
   grade: 'cool'
 };
 
-let deferredPrompt = null;
-const installPrompt = document.getElementById('installPrompt');
-const installBtn = document.getElementById('installBtn');
-const dismissBtn = document.getElementById('dismissBtn');
 
 // Chrome fires this when CamShot is installable
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -1338,6 +1394,13 @@ zoomBar.querySelectorAll('button').forEach(b => {
 /* ============================================================
    SETTINGS PANEL — Lighting controls
    ============================================================ */
+
+   // User-tunable lighting state
+let lightingSettings = {
+  autoExposure: true,
+  brightnessEV: 0,
+  contrast: 1
+};
 const settingsPanel = document.getElementById('settingsPanel');
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsClose = document.getElementById('settingsClose');
@@ -1349,12 +1412,7 @@ const brightnessVal = document.getElementById('brightnessVal');
 const contrastSlider = document.getElementById('contrastSlider');
 const contrastVal = document.getElementById('contrastVal');
 
-// User-tunable lighting state
-let lightingSettings = {
-  autoExposure: true,
-  brightnessEV: 0,      // -2 .. +2 EV manual offset (added on top of auto-exposure)
-  contrast: 1          // 0.5 .. 2 — applied as post-processing multiplier
-};
+
 
 function updateAESwitch() {
   aeSwitch.classList.toggle('on', lightingSettings.autoExposure);
