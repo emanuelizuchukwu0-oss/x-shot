@@ -946,8 +946,7 @@ function makeClearer(ctx, w, h) {
     const nh = Math.round(h * scale);
     const tmp = document.createElement('canvas');
     tmp.width = nw; tmp.height = nh;
-    const tctx = tmp.getContext('2d');
-    tctx.drawImage(canvas, 0, 0, nw, nh);
+const tctx = tmp.getContext('2d', { willReadFrequently: true });    tctx.drawImage(canvas, 0, 0, nw, nh);
     canvas.width = nw; canvas.height = nh;
     ctx.drawImage(tmp, 0, 0);
     w = nw; h = nh;

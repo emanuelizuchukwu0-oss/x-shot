@@ -190,7 +190,7 @@
    ============================================================ */
 
 const canvas = document.getElementById('editorCanvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
 const canvasWrap = document.getElementById('canvasWrap');
 const textLayer = document.getElementById('textLayer');
 const loading = document.getElementById('loading');
@@ -379,13 +379,6 @@ subpanelSlider.addEventListener('change', () => {
   saveHistory();
 });
 
-subpanelReset.addEventListener('click', () => {
-  subpanelSlider.value = 50;
-  subpanelVal.textContent = '50';
-  drawBase();
-  renderTexts();
-  saveHistory();
-});
 
 function applyBrightness(amount) {
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
