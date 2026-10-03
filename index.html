@@ -1003,7 +1003,7 @@ async function capturePhoto() {
     // Grab the frame (respecting zoom)
     const vw = video.videoWidth;
     const vh = video.videoHeight;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
     if (!hardwareZoomSupported && zoom > 1) {
       const cropW = vw / zoom;
@@ -1065,8 +1065,7 @@ function applyPortraitBlur(ctx, w, h) {
 
   const sharp = document.createElement('canvas');
   sharp.width = w; sharp.height = h;
-  sharp.getContext('2d').drawImage(canvas, 0, 0);
-
+  sharp.getContext('2d', { willReadFrequently: true }).drawImage(canvas, 0, 0);
   // Subject area — same wide ellipse as before so you stay sharp
   const cx = w / 2, cy = h * 0.52;
   const rx = w * 0.38;
@@ -1074,8 +1073,7 @@ function applyPortraitBlur(ctx, w, h) {
 
   const maskCanvas = document.createElement('canvas');
   maskCanvas.width = w; maskCanvas.height = h;
-  const mctx = maskCanvas.getContext('2d');
-
+  const mctx = maskCanvas.getContext('2d', { willReadFrequently: true });
   const grad = mctx.createRadialGradient(
     cx, cy, Math.min(rx, ry) * 0.6,
     cx, cy, Math.max(rx, ry)
@@ -1092,8 +1090,7 @@ function applyPortraitBlur(ctx, w, h) {
 
   const layer = document.createElement('canvas');
   layer.width = w; layer.height = h;
-  const lctx = layer.getContext('2d');
-  lctx.drawImage(sharp, 0, 0);
+  const lctx = layer.getContext('2d', { willReadFrequently: true });  lctx.drawImage(sharp, 0, 0);
   lctx.globalCompositeOperation = 'destination-in';
   lctx.drawImage(maskCanvas, 0, 0);
 
