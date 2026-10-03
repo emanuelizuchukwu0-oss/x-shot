@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>CamShot Editor</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: #0a0a0c; overflow: hidden; font-family: -apple-system, system-ui, sans-serif; color: #fff; }
+
+  .editor-shell {
+    display: flex; flex-direction: column;
+    height: 100%;
+  }
+
+  /* Top bar */
+  .editor-top {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    background: #141416;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    z-index: 10;
+  }
+  .editor-top button {
+    background: rgba(255,255,255,.08); border: none; color: #fff;
+    padding: 8px 14px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; cursor: pointer;
+    touch-action: manipulation;
+  }
+  .editor-top .save-btn { background: #ffb800; color: #000; }
+
+  /* Canvas area */
+  .editor-canvas-wrap {
+    flex: 1; position: relative;
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    background: #000;
+    touch-action: none;
+  }
+  #editorCanvas {
+    max-width: 100%; max-height: 100%;
+    display: block;
+    touch-action: none;
+  }
+
+  /* Text overlay (invisible divs that hold editable text) */
+  .text-layer {
+    position: absolute; inset: 0;
+    pointer-events: none;
+  }
+  .text-layer.active { pointer-events: auto; }
+  .text-item {
+    position: absolute;
+    pointer-events: auto;
+    cursor: move;
+    padding: 4px 6px;
+    border: 2px dashed transparent;
+    white-space: pre;
+    user-select: none;
+    min-width: 20px;
+  }
+  .text-item.selected {
+    border-color: #ffb800;
+    background: rgba(255,184,0,.08);
+  }
+  .text-item.editing {
+    border-color: #00d4ff;
+    background: rgba(0,212,255,.08);
+    cursor: text;
+  }
+  .text-item.editing input,
+  .text-item.editing textarea {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: inherit;
+    font: inherit;
+    padding: 0;
+    resize: none;
+    width: 100%;
+    min-width: 40px;
+  }
+
+  /* Tool bar */
+  .toolbar {
+    background: #141416;
+    border-top: 1px solid rgba(255,255,255,.08);
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    display: flex; gap: 8px; overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .toolbar::-webkit-scrollbar { display: none; }
+
+  .tool {
+    flex-shrink: 0;
+    background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.08);
+    color: #fff;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 12px; font-weight: 700;
+    cursor: pointer;
+    touch-action: manipulation;
+    display: flex; align-items: center; gap: 6px;
+    transition: all .15s;
+  }
+  .tool.active {
+    background: #ffb800;
+    color: #000;
+    border-color: #ffb800;
+  }
+
+  /* Bottom sub-panel — appears when a tool is active */
+  .subpanel {
+    background: #141416;
+    border-top: 1px solid rgba(255,255,255,.08);
+    padding: 12px 16px;
+    display: none;
+    gap: 12px;
+    align-items: center;
+  }
+  .subpanel.show { display: flex; }
+  .subpanel input[type=range] {
+    flex: 1; accent-color: #ffb800;
+  }
+  .subpanel .val {
+    font-size: 12px; font-weight: 700; color: #ffb800;
+    min-width: 50px; text-align: right;
+  }
+  .subpanel .color-swatch {
+    width: 32px; height: 32px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,.3);
+    cursor: pointer;
+  }
+
+  /* Loading state */
+  .editor-loading {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #000; color: #888; font-size: 14px;
+    z-index: 20;
+  }
+
+  /* Empty state */
+  .editor-empty {
+    text-align: center; padding: 40px;
+    color: #666;
+  }
+  .editor-empty h2 { font-size: 18px; margin-bottom: 12px; color: #aaa; }
+  .editor-empty a { color: #ffb800; text-decoration: none; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div class="editor-shell">
+  <div class="editor-top">
+    <button id="backBtn">← Back</button>
+    <button class="save-btn" id="saveBtn">Save Copy</button>
+  </div>
+
+  <div class="editor-canvas-wrap" id="canvasWrap">
+    <div class="editor-loading" id="loading">Loading image…</div>
+    <canvas id="editorCanvas"></canvas>
+    <div class="text-layer" id="textLayer"></div>
+  </div>
+
+  <div class="subpanel" id="subpanel">
+    <label id="subpanelLabel">Adjust</label>
+    <input type="range" id="subpanelSlider" min="0" max="100" value="50" />
+    <span class="val" id="subpanelVal">50</span>
+    <button class="tool" id="subpanelReset" style="flex-shrink:0;">Reset</button>
+  </div>
+
+  <div class="toolbar" id="toolbar">
+    <button class="tool" data-tool="select">👆 Select</button>
+    <button class="tool" data-tool="text">T Text</button>
+    <button class="tool" data-tool="erase">⌫ Erase</button>
+    <button class="tool" data-tool="crop">✂ Crop</button>
+    <button class="tool" data-tool="brightness">☀ Bright</button>
+    <button class="tool" data-tool="contrast">◐ Contrast</button>
+    <button class="tool" data-tool="blur">◆ Blur BG</button>
+    <button class="tool" data-tool="undo">↶ Undo</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   EDITOR — loads photo from sessionStorage, lets user edit
+   ============================================================ */
+
+const canvas = document.getElementById('editorCanvas');
+const ctx = canvas.getContext('2d');
+const canvasWrap = document.getElementById('canvasWrap');
+const textLayer = document.getElementById('textLayer');
+const loading = document.getElementById('loading');
+const subpanel = document.getElementById('subpanel');
+const subpanelLabel = document.getElementById('subpanelLabel');
+const subpanelSlider = document.getElementById('subpanelSlider');
+const subpanelVal = document.getElementById('subpanelVal');
+const subpanelReset = document.getElementById('subpanelReset');
+const toolbar = document.getElementById('toolbar');
+
+let currentTool = 'select';
+let history = [];               // for undo
+let baseImage = null;           // original Image element
+let textItems = [];             // { el, x, y, text, fontSize, color, fontFamily }
+let selectedText = null;
+let isDrawing = false;
+let erasePaths = [];            // list of erase strokes for canvas re-render
+
+// --- Load the image from sessionStorage ---
+function loadImage() {
+  const url = sessionStorage.getItem('camshot_edit_image');
+  if (!url) {
+    loading.innerHTML = '<div class="editor-empty"><h2>No image to edit</h2><p>Take a photo in <a href="/">CamShot</a> first, then tap Edit.</p></div>';
+    return;
+  }
+
+  const img = new Image();
+  img.onload = () => {
+    baseImage = img;
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+
+    // Fit canvas to viewport while preserving aspect ratio
+    fitCanvas();
+
+    drawBase();
+    loading.style.display = 'none';
+    saveHistory();
+  };
+  img.onerror = () => {
+    loading.innerHTML = 'Failed to load image.';
+  };
+  img.src = url;
+}
+
+function fitCanvas() {
+  const wrapRect = canvasWrap.getBoundingClientRect();
+  const ratio = canvas.width / canvas.height;
+  let w = wrapRect.width;
+  let h = w / ratio;
+  if (h > wrapRect.height) {
+    h = wrapRect.height;
+    w = h * ratio;
+  }
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+}
+
+window.addEventListener('resize', fitCanvas);
+
+// --- Draw the base image + any applied effects ---
+function drawBase() {
+  if (!baseImage) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(baseImage, 0, 0);
+
+  // Apply erase strokes (destination-out on each path)
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const stroke of erasePaths) {
+    ctx.lineWidth = stroke.size;
+    ctx.beginPath();
+    for (let i = 0; i < stroke.points.length; i++) {
+      const p = stroke.points[i];
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// --- History / undo ---
+function saveHistory() {
+  // Save a snapshot of the canvas state
+  try {
+    const snap = canvas.toDataURL('image/png');
+    history.push({
+      snap,
+      erasePaths: JSON.parse(JSON.stringify(erasePaths)),
+      texts: textItems.map(t => ({
+        text: t.text, x: t.x, y: t.y,
+        fontSize: t.fontSize, color: t.color, fontFamily: t.fontFamily
+      }))
+    });
+    if (history.length > 20) history.shift();
+  } catch (e) {
+    console.warn('History save failed:', e);
+  }
+}
+
+async function undo() {
+  if (history.length <= 1) return;
+  history.pop();   // discard current state
+  const prev = history[history.length - 1];
+
+  // Restore erase paths
+  erasePaths = prev.erasePaths;
+
+  // Restore text items
+  textLayer.innerHTML = '';
+  textItems = [];
+  for (const t of prev.texts) {
+    createTextItem(t.text, t.x, t.y, t.fontSize, t.color, t.fontFamily, false);
+  }
+
+  // Restore the canvas pixels from the snapshot
+  const img = new Image();
+  img.onload = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+  };
+  img.src = prev.snap;
+}
+
+/* ============================================================
+   TOOLS
+   ============================================================ */
+
+toolbar.addEventListener('click', (e) => {
+  const btn = e.target.closest('.tool');
+  if (!btn) return;
+  const tool = btn.dataset.tool;
+
+  if (tool === 'undo') {
+    undo();
+    return;
+  }
+
+  // Deactivate old tool
+  toolbar.querySelectorAll('.tool').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  currentTool = tool;
+
+  // Hide subpanel by default
+  subpanel.classList.remove('show');
+  textLayer.classList.remove('active');
+
+  // Show subpanel for tools that need it
+  if (tool === 'brightness' || tool === 'contrast' || tool === 'blur') {
+    subpanel.classList.add('show');
+    subpanelLabel.textContent = tool === 'brightness' ? 'Brightness'
+                             : tool === 'contrast' ? 'Contrast'
+                             : 'Blur Amount';
+    subpanelSlider.value = 50;
+    subpanelVal.textContent = 50;
+  }
+
+  if (tool === 'text') {
+    textLayer.classList.add('active');
+  }
+
+  if (tool === 'erase') {
+    canvas.style.cursor = 'crosshair';
+  } else {
+    canvas.style.cursor = 'default';
+  }
+});
+
+/* ---------- BRIGHTNESS / CONTRAST / BLUR ---------- */
+subpanelSlider.addEventListener('input', () => {
+  subpanelVal.textContent = subpanelSlider.value;
+});
+
+subpanelSlider.addEventListener('change', () => {
+  const val = parseInt(subpanelSlider.value, 10);
+  if (currentTool === 'brightness') {
+    applyBrightness((val - 50) / 50);   // -1 .. +1
+  } else if (currentTool === 'contrast') {
+    applyContrast((val - 50) / 50);
+  } else if (currentTool === 'blur') {
+    applyBlur(val / 5);   // 0..20px blur
+  }
+  saveHistory();
+});
+
+subpanelReset.addEventListener('click', () => {
+  subpanelSlider.value = 50;
+  subpanelVal.textContent = '50';
+  drawBase();
+  renderTexts();
+  saveHistory();
+});
+
+function applyBrightness(amount) {
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imgData.data;
+  const adj = Math.round(amount * 80);
+  for (let i = 0; i < d.length; i += 4) {
+    d[i]     = Math.min(255, Math.max(0, d[i]     + adj));
+    d[i + 1] = Math.min(255, Math.max(0, d[i + 1] + adj));
+    d[i + 2] = Math.min(255, Math.max(0, d[i + 2] + adj));
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+function applyContrast(amount) {
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imgData.data;
+  // factor 0 → grey, 1 → normal, 2 → high contrast
+  const factor = (259 * (amount * 100 + 255)) / (255 * (259 - amount * 100));
+  for (let i = 0; i < d.length; i += 4) {
+    d[i]     = Math.min(255, Math.max(0, factor * (d[i]     - 128) + 128));
+    d[i + 1] = Math.min(255, Math.max(0, factor * (d[i + 1] - 128) + 128));
+    d[i + 2] = Math.min(255, Math.max(0, factor * (d[i + 2] - 128) + 128));
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+function applyBlur(px) {
+  const tmp = document.createElement('canvas');
+  tmp.width = canvas.width;
+  tmp.height = canvas.height;
+  tmp.getContext('2d').drawImage(canvas, 0, 0);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.filter = `blur(${px}px)`;
+  ctx.drawImage(tmp, 0, 0);
+  ctx.filter = 'none';
+
+  // Re-apply erase and texts on top
+  redrawEraseOnly();
+}
+
+function redrawEraseOnly() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const stroke of erasePaths) {
+    ctx.lineWidth = stroke.size;
+    ctx.beginPath();
+    for (let i = 0; i < stroke.points.length; i++) {
+      const p = stroke.points[i];
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ---------- ERASE ---------- */
+let activeStroke = null;
+
+function pointerToCanvas(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: (e.clientX - rect.left) * scaleX,
+    y: (e.clientY - rect.top) * scaleY
+  };
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (currentTool === 'erase') {
+    isDrawing = true;
+    canvas.setPointerCapture(e.pointerId);
+    const p = pointerToCanvas(e);
+    activeStroke = {
+      size: Math.max(20, canvas.width / 60),
+      points: [p]
+    };
+    erasePaths.push(activeStroke);
+    redrawEraseOnly();
+  }
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (!isDrawing || currentTool !== 'erase' || !activeStroke) return;
+  const p = pointerToCanvas(e);
+  activeStroke.points.push(p);
+  redrawEraseOnly();
+});
+
+canvas.addEventListener('pointerup', () => {
+  if (isDrawing && currentTool === 'erase') {
+    isDrawing = false;
+    activeStroke = null;
+    saveHistory();
+  }
+});
+
+canvas.addEventListener('pointercancel', () => {
+  isDrawing = false;
+  activeStroke = null;
+});
+
+/* ---------- TEXT ---------- */
+function createTextItem(text, x, y, fontSize, color, fontFamily, saveNow = true) {
+  const el = document.createElement('div');
+  el.className = 'text-item';
+  el.textContent = text;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  el.style.fontSize = fontSize + 'px';
+  el.style.color = color;
+  el.style.fontFamily = fontFamily || 'system-ui';
+  el.style.fontWeight = '800';
+  el.style.textShadow = '0 2px 8px rgba(0,0,0,.5)';
+
+  const item = {
+    el, text, x, y, fontSize, color, fontFamily,
+    get positions() { return { x: parseInt(el.style.left), y: parseInt(el.style.top) }; }
+  };
+
+  // Drag support
+  let dragging = false;
+  let dragStart = null;
+
+  el.addEventListener('pointerdown', (e) => {
+    if (currentTool !== 'text' && currentTool !== 'select') return;
+    if (el.classList.contains('editing')) return;
+    dragging = true;
+    dragStart = { x: e.clientX, y: e.clientY, l: parseInt(el.style.left), t: parseInt(el.style.top) };
+    el.setPointerCapture(e.pointerId);
+    selectTextItem(item);
+    e.stopPropagation();
+  });
+
+  el.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - dragStart.x;
+    const dy = e.clientY - dragStart.y;
+    el.style.left = (dragStart.l + dx) + 'px';
+    el.style.top  = (dragStart.t + dy) + 'px';
+  });
+
+  el.addEventListener('pointerup', () => {
+    if (dragging) {
+      dragging = false;
+      item.x = parseInt(el.style.left);
+      item.y = parseInt(el.style.top);
+      saveHistory();
+    }
+  });
+
+  // Double-click to edit
+  el.addEventListener('dblclick', () => startEditText(item));
+
+  textLayer.appendChild(el);
+  textItems.push(item);
+  if (saveNow) saveHistory();
+  return item;
+}
+
+function selectTextItem(item) {
+  textItems.forEach(t => t.el.classList.remove('selected'));
+  item.el.classList.add('selected');
+  selectedText = item;
+}
+
+function startEditText(item) {
+  item.el.classList.remove('selected');
+  item.el.classList.add('editing');
+
+  const currentText = item.text;
+  item.el.innerHTML = '';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = currentText;
+  input.style.color = item.color;
+  input.style.fontSize = item.fontSize + 'px';
+  item.el.appendChild(input);
+  input.focus();
+  input.select();
+
+  function commit() {
+    const newText = input.value || 'Text';
+    item.text = newText;
+    item.el.textContent = newText;
+    item.el.classList.remove('editing');
+    saveHistory();
+  }
+
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { input.value = currentText; input.blur(); }
+  });
+}
+
+// Tap empty space to add new text
+canvasWrap.addEventListener('pointerdown', (e) => {
+  if (currentTool !== 'text') return;
+  if (e.target !== canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const item = createTextItem('Text', x, y, Math.max(20, canvas.width / 25), '#ffffff', 'system-ui');
+  selectTextItem(item);
+  setTimeout(() => startEditText(item), 50);
+});
+
+/* ---------- SAVE ---------- */
+document.getElementById('saveBtn').addEventListener('click', () => {
+  // Composite: canvas pixels + text overlay drawn on top
+  const out = document.createElement('canvas');
+  out.width = canvas.width;
+  out.height = canvas.height;
+  const octx = out.getContext('2d');
+
+  // Draw the base canvas (image + erase + effects)
+  octx.drawImage(canvas, 0, 0);
+
+  // Draw each text item onto the output at the right scaled position
+  const canvasRect = canvas.getBoundingClientRect();
+  for (const t of textItems) {
+    const pos = t.positions;
+    const scaleX = canvas.width / canvasRect.width;
+    const scaleY = canvas.height / canvasRect.height;
+    const x = pos.x * scaleX;
+    const y = pos.y * scaleY;
+    const fontSize = t.fontSize * scaleY;   // approximate scale
+
+    octx.font = `800 ${fontSize}px ${t.fontFamily}`;
+    octx.fillStyle = t.color;
+    octx.textBaseline = 'top';
+    octx.shadowColor = 'rgba(0,0,0,.5)';
+    octx.shadowBlur = fontSize * 0.1;
+    octx.fillText(t.text, x, y);
+  }
+
+  const url = out.toDataURL('image/jpeg', 0.92);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `camshot-edit-${Date.now()}.jpg`;
+  a.click();
+});
+
+/* ---------- BACK ---------- */
+document.getElementById('backBtn').addEventListener('click', () => {
+  sessionStorage.removeItem('camshot_edit_image');
+  window.location.href = '/';
+});
+
+/* ---------- INIT ---------- */
+loadImage();
+</script>
+</body>
+</html>

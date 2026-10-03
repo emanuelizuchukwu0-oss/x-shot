@@ -413,6 +413,12 @@
   background: rgba(255,255,255,.1); color: #fff;
 }
 .flash-btn.done { background: #ffb800; color: #000; }
+
+.review-btn.edit {
+  background: rgba(255,255,255,.15);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.3);
+}
 </style>
 </head>
 <body>
@@ -458,10 +464,10 @@
 <div class="review-overlay" id="reviewOverlay">
   <video id="reviewVideo" playsinline controls loop></video>
   <img id="reviewImage" alt="" />
-  <div class="review-actions">
-    <button class="review-btn retake" id="retakeBtn">Retake</button>
-    <button class="review-btn save" id="saveBtn">Save</button>
-  </div>
+<div class="review-actions">
+  <button class="review-btn retake" id="retakeBtn">Retake</button>
+  <button class="review-btn edit" id="editBtn">Edit</button>
+  <button class="review-btn save" id="saveBtn">Save</button>
 </div>
 
 <div class="settings-panel" id="settingsPanel">
@@ -1532,6 +1538,23 @@ zoomBar.querySelectorAll('button').forEach(b => {
     applyZoom();
     showToast(hardwareZoomSupported ? `Zoom ${zoom}×` : `Zoom ${zoom}× (digital)`, 900);
   });
+});
+
+document.getElementById('editBtn').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (!pendingCapture) return;
+
+  // Hand the image to the editor via sessionStorage.
+  // sessionStorage survives page navigation within the same tab.
+  try {
+    sessionStorage.setItem('camshot_edit_image', pendingCapture.url);
+    sessionStorage.setItem('camshot_edit_type', pendingCapture.type);
+    window.location.href = '/editor.html';
+  } catch (err) {
+    console.error('Could not open editor:', err);
+    showToast('Could not open editor — image too large?');
+  }
 });
 
 /* ============================================================
