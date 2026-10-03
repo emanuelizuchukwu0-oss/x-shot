@@ -183,10 +183,14 @@
     <button class="tool" data-tool="undo">↶ Undo</button>
   </div>
 </div>
+  <div class="toolbar" id="toolbar">
+    ...
+  </div>
+</div>
 
 <script>
 /* ============================================================
-   EDITOR — loads photo from sessionStorage, lets user edit
+   EDITOR — with touch gestures (pinch, pan, drag)
    ============================================================ */
 
 const canvas = document.getElementById('editorCanvas');
@@ -202,14 +206,96 @@ const subpanelReset = document.getElementById('subpanelReset');
 const toolbar = document.getElementById('toolbar');
 
 let currentTool = 'select';
-let history = [];               // for undo
-let baseImage = null;           // original Image element
-let textItems = [];             // { el, x, y, text, fontSize, color, fontFamily }
+let history = [];
+let baseImage = null;
+let textItems = [];
 let selectedText = null;
 let isDrawing = false;
-let erasePaths = [];            // list of erase strokes for canvas re-render
+let erasePaths = [];
+let brushSize = 30;
 
-// --- Load the image from sessionStorage ---
+// ---- View transform (pinch / pan) ----
+let view = { scale: 1, x: 0, y: 0 };
+let lastTouches = null;
+
+/* ============================================================
+   TOUCH GESTURES — pinch zoom, two-finger pan
+   ============================================================ */
+
+canvasWrap.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2) {
+    // Two fingers — start pinch/pan, cancel any drawing
+    isDrawing = false;
+    activeStroke = null;
+    lastTouches = {
+      dist: touchDist(e.touches),
+      mid: touchMid(e.touches),
+      scale: view.scale,
+      x: view.x,
+      y: view.y
+    };
+    e.preventDefault();
+  }
+}, { passive: false });
+
+canvasWrap.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 2 && lastTouches) {
+    const dist = touchDist(e.touches);
+    const mid = touchMid(e.touches);
+    const ratio = dist / lastTouches.dist;
+
+    // New scale — clamp between 0.5x and 5x
+    const newScale = Math.max(0.5, Math.min(5, lastTouches.scale * ratio));
+    view.scale = newScale;
+
+    // Pan follows the midpoint
+    view.x = lastTouches.x + (mid.x - lastTouches.mid.x);
+    view.y = lastTouches.y + (mid.y - lastTouches.mid.y);
+
+    applyViewTransform();
+    e.preventDefault();
+  }
+}, { passive: false });
+
+canvasWrap.addEventListener('touchend', (e) => {
+  if (e.touches.length < 2) lastTouches = null;
+});
+
+function touchDist(touches) {
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.hypot(dx, dy);
+}
+function touchMid(touches) {
+  return {
+    x: (touches[0].clientX + touches[1].clientX) / 2,
+    y: (touches[0].clientY + touches[1].clientY) / 2
+  };
+}
+
+function applyViewTransform() {
+  canvas.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+  canvas.style.transformOrigin = 'center center';
+  textLayer.style.transform = canvas.style.transform;
+  textLayer.style.transformOrigin = 'center center';
+}
+
+// Double-tap resets the view
+let lastTapTime = 0;
+canvasWrap.addEventListener('touchend', (e) => {
+  if (e.touches.length > 0) return;
+  const now = Date.now();
+  if (now - lastTapTime < 300) {
+    view = { scale: 1, x: 0, y: 0 };
+    applyViewTransform();
+  }
+  lastTapTime = now;
+});
+
+/* ============================================================
+   LOAD IMAGE
+   ============================================================ */
+
 function loadImage() {
   const url = sessionStorage.getItem('camshot_edit_image');
   if (!url) {
@@ -222,17 +308,12 @@ function loadImage() {
     baseImage = img;
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
-
-    // Fit canvas to viewport while preserving aspect ratio
     fitCanvas();
-
     drawBase();
     loading.style.display = 'none';
     saveHistory();
   };
-  img.onerror = () => {
-    loading.innerHTML = 'Failed to load image.';
-  };
+  img.onerror = () => { loading.innerHTML = 'Failed to load image.'; };
   img.src = url;
 }
 
@@ -251,33 +332,14 @@ function fitCanvas() {
 
 window.addEventListener('resize', fitCanvas);
 
-// --- Draw the base image + any applied effects ---
 function drawBase() {
   if (!baseImage) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(baseImage, 0, 0);
-
-  // Apply erase strokes (destination-out on each path)
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  for (const stroke of erasePaths) {
-    ctx.lineWidth = stroke.size;
-    ctx.beginPath();
-    for (let i = 0; i < stroke.points.length; i++) {
-      const p = stroke.points[i];
-      if (i === 0) ctx.moveTo(p.x, p.y);
-      else ctx.lineTo(p.x, p.y);
-    }
-    ctx.stroke();
-  }
-  ctx.restore();
+  redrawEraseOnly();
 }
 
-// --- History / undo ---
 function saveHistory() {
-  // Save a snapshot of the canvas state
   try {
     const snap = canvas.toDataURL('image/png');
     history.push({
@@ -289,27 +351,19 @@ function saveHistory() {
       }))
     });
     if (history.length > 20) history.shift();
-  } catch (e) {
-    console.warn('History save failed:', e);
-  }
+  } catch (e) { console.warn('History save failed:', e); }
 }
 
 async function undo() {
   if (history.length <= 1) return;
-  history.pop();   // discard current state
+  history.pop();
   const prev = history[history.length - 1];
-
-  // Restore erase paths
   erasePaths = prev.erasePaths;
-
-  // Restore text items
   textLayer.innerHTML = '';
   textItems = [];
   for (const t of prev.texts) {
     createTextItem(t.text, t.x, t.y, t.fontSize, t.color, t.fontFamily, false);
   }
-
-  // Restore the canvas pixels from the snapshot
   const img = new Image();
   img.onload = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -319,7 +373,7 @@ async function undo() {
 }
 
 /* ============================================================
-   TOOLS
+   TOOLBAR
    ============================================================ */
 
 toolbar.addEventListener('click', (e) => {
@@ -327,21 +381,15 @@ toolbar.addEventListener('click', (e) => {
   if (!btn) return;
   const tool = btn.dataset.tool;
 
-  if (tool === 'undo') {
-    undo();
-    return;
-  }
+  if (tool === 'undo') { undo(); return; }
 
-  // Deactivate old tool
   toolbar.querySelectorAll('.tool').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   currentTool = tool;
 
-  // Hide subpanel by default
   subpanel.classList.remove('show');
   textLayer.classList.remove('active');
 
-  // Show subpanel for tools that need it
   if (tool === 'brightness' || tool === 'contrast' || tool === 'blur') {
     subpanel.classList.add('show');
     subpanelLabel.textContent = tool === 'brightness' ? 'Brightness'
@@ -350,35 +398,27 @@ toolbar.addEventListener('click', (e) => {
     subpanelSlider.value = 50;
     subpanelVal.textContent = 50;
   }
-
-  if (tool === 'text') {
-    textLayer.classList.add('active');
-  }
-
-  if (tool === 'erase') {
-    canvas.style.cursor = 'crosshair';
-  } else {
-    canvas.style.cursor = 'default';
-  }
+  if (tool === 'text') textLayer.classList.add('active');
 });
 
-/* ---------- BRIGHTNESS / CONTRAST / BLUR ---------- */
 subpanelSlider.addEventListener('input', () => {
   subpanelVal.textContent = subpanelSlider.value;
 });
 
 subpanelSlider.addEventListener('change', () => {
   const val = parseInt(subpanelSlider.value, 10);
-  if (currentTool === 'brightness') {
-    applyBrightness((val - 50) / 50);   // -1 .. +1
-  } else if (currentTool === 'contrast') {
-    applyContrast((val - 50) / 50);
-  } else if (currentTool === 'blur') {
-    applyBlur(val / 5);   // 0..20px blur
-  }
+  if (currentTool === 'brightness') applyBrightness((val - 50) / 50);
+  else if (currentTool === 'contrast') applyContrast((val - 50) / 50);
+  else if (currentTool === 'blur') applyBlur(val / 5);
   saveHistory();
 });
 
+subpanelReset.addEventListener('click', () => {
+  subpanelSlider.value = 50;
+  subpanelVal.textContent = '50';
+  drawBase();
+  saveHistory();
+});
 
 function applyBrightness(amount) {
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -395,7 +435,6 @@ function applyBrightness(amount) {
 function applyContrast(amount) {
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const d = imgData.data;
-  // factor 0 → grey, 1 → normal, 2 → high contrast
   const factor = (259 * (amount * 100 + 255)) / (255 * (259 - amount * 100));
   for (let i = 0; i < d.length; i += 4) {
     d[i]     = Math.min(255, Math.max(0, factor * (d[i]     - 128) + 128));
@@ -409,14 +448,12 @@ function applyBlur(px) {
   const tmp = document.createElement('canvas');
   tmp.width = canvas.width;
   tmp.height = canvas.height;
-  tmp.getContext('2d').drawImage(canvas, 0, 0);
+  tmp.getContext('2d', { willReadFrequently: true }).drawImage(canvas, 0, 0);
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.filter = `blur(${px}px)`;
   ctx.drawImage(tmp, 0, 0);
   ctx.filter = 'none';
-
-  // Re-apply erase and texts on top
   redrawEraseOnly();
 }
 
@@ -438,7 +475,10 @@ function redrawEraseOnly() {
   ctx.restore();
 }
 
-/* ---------- ERASE ---------- */
+/* ============================================================
+   ERASE — finger drag wipes pixels
+   ============================================================ */
+
 let activeStroke = null;
 
 function pointerToCanvas(e) {
@@ -452,23 +492,21 @@ function pointerToCanvas(e) {
 }
 
 canvas.addEventListener('pointerdown', (e) => {
-  if (currentTool === 'erase') {
-    isDrawing = true;
-    canvas.setPointerCapture(e.pointerId);
-    const p = pointerToCanvas(e);
-    activeStroke = {
-      size: Math.max(20, canvas.width / 60),
-      points: [p]
-    };
-    erasePaths.push(activeStroke);
-    redrawEraseOnly();
-  }
+  if (currentTool !== 'erase') return;
+  isDrawing = true;
+  canvas.setPointerCapture(e.pointerId);
+  const p = pointerToCanvas(e);
+  activeStroke = {
+    size: Math.max(20, canvas.width / 40),
+    points: [p]
+  };
+  erasePaths.push(activeStroke);
+  redrawEraseOnly();
 });
 
 canvas.addEventListener('pointermove', (e) => {
   if (!isDrawing || currentTool !== 'erase' || !activeStroke) return;
-  const p = pointerToCanvas(e);
-  activeStroke.points.push(p);
+  activeStroke.points.push(pointerToCanvas(e));
   redrawEraseOnly();
 });
 
@@ -485,7 +523,10 @@ canvas.addEventListener('pointercancel', () => {
   activeStroke = null;
 });
 
-/* ---------- TEXT ---------- */
+/* ============================================================
+   TEXT — tap to place, drag to move, double-tap to edit
+   ============================================================ */
+
 function createTextItem(text, x, y, fontSize, color, fontFamily, saveNow = true) {
   const el = document.createElement('div');
   el.className = 'text-item';
@@ -503,14 +544,15 @@ function createTextItem(text, x, y, fontSize, color, fontFamily, saveNow = true)
     get positions() { return { x: parseInt(el.style.left), y: parseInt(el.style.top) }; }
   };
 
-  // Drag support
   let dragging = false;
   let dragStart = null;
+  let moved = false;
 
   el.addEventListener('pointerdown', (e) => {
     if (currentTool !== 'text' && currentTool !== 'select') return;
     if (el.classList.contains('editing')) return;
     dragging = true;
+    moved = false;
     dragStart = { x: e.clientX, y: e.clientY, l: parseInt(el.style.left), t: parseInt(el.style.top) };
     el.setPointerCapture(e.pointerId);
     selectTextItem(item);
@@ -521,6 +563,7 @@ function createTextItem(text, x, y, fontSize, color, fontFamily, saveNow = true)
     if (!dragging) return;
     const dx = e.clientX - dragStart.x;
     const dy = e.clientY - dragStart.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
     el.style.left = (dragStart.l + dx) + 'px';
     el.style.top  = (dragStart.t + dy) + 'px';
   });
@@ -530,12 +573,11 @@ function createTextItem(text, x, y, fontSize, color, fontFamily, saveNow = true)
       dragging = false;
       item.x = parseInt(el.style.left);
       item.y = parseInt(el.style.top);
-      saveHistory();
+      // If the user just tapped without moving, start editing
+      if (!moved) startEditText(item);
+      else saveHistory();
     }
   });
-
-  // Double-click to edit
-  el.addEventListener('dblclick', () => startEditText(item));
 
   textLayer.appendChild(el);
   textItems.push(item);
@@ -579,7 +621,6 @@ function startEditText(item) {
   });
 }
 
-// Tap empty space to add new text
 canvasWrap.addEventListener('pointerdown', (e) => {
   if (currentTool !== 'text') return;
   if (e.target !== canvas) return;
@@ -591,18 +632,18 @@ canvasWrap.addEventListener('pointerdown', (e) => {
   setTimeout(() => startEditText(item), 50);
 });
 
-/* ---------- SAVE ---------- */
+/* ============================================================
+   SAVE
+   ============================================================ */
+
 document.getElementById('saveBtn').addEventListener('click', () => {
-  // Composite: canvas pixels + text overlay drawn on top
   const out = document.createElement('canvas');
   out.width = canvas.width;
   out.height = canvas.height;
   const octx = out.getContext('2d');
 
-  // Draw the base canvas (image + erase + effects)
   octx.drawImage(canvas, 0, 0);
 
-  // Draw each text item onto the output at the right scaled position
   const canvasRect = canvas.getBoundingClientRect();
   for (const t of textItems) {
     const pos = t.positions;
@@ -610,7 +651,7 @@ document.getElementById('saveBtn').addEventListener('click', () => {
     const scaleY = canvas.height / canvasRect.height;
     const x = pos.x * scaleX;
     const y = pos.y * scaleY;
-    const fontSize = t.fontSize * scaleY;   // approximate scale
+    const fontSize = t.fontSize * scaleY;
 
     octx.font = `800 ${fontSize}px ${t.fontFamily}`;
     octx.fillStyle = t.color;
@@ -627,13 +668,11 @@ document.getElementById('saveBtn').addEventListener('click', () => {
   a.click();
 });
 
-/* ---------- BACK ---------- */
 document.getElementById('backBtn').addEventListener('click', () => {
   sessionStorage.removeItem('camshot_edit_image');
   window.location.href = '/';
 });
 
-/* ---------- INIT ---------- */
 loadImage();
 </script>
 </body>
