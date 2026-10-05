@@ -3,1663 +3,284 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>CamShot</title>
+<meta name="theme-color" content="#0a0a0c" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Rendar" />
+<title>Rendar — Edit photos in your browser</title>
+<link rel="manifest" href="/manifest.json">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
-  html, body { height: 100%; background: #000; overflow: hidden; font-family: -apple-system, system-ui, sans-serif; color: #fff; }
-  video { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-
-  .flash-overlay {
-    position: fixed; inset: 0; background: #fff; opacity: 0;
-    pointer-events: none; z-index: 50; transition: opacity .06s;
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    background: #0a0a0c; color: #f5f5f7;
+    font-family: -apple-system, system-ui, "Segoe UI", sans-serif;
+    min-height: 100%;
+    -webkit-font-smoothing: antialiased;
   }
-  .flash-overlay.on { opacity: 1; }
+  a { color: inherit; text-decoration: none; }
 
-  .top {
-    position: fixed; top: 0; left: 0; right: 0;
-    padding: 16px 20px;
+  /* Nav */
+  .nav {
     display: flex; justify-content: space-between; align-items: center;
-    background: linear-gradient(to bottom, rgba(0,0,0,.5), transparent);
-    z-index: 10;
-    padding-top: max(16px, env(safe-area-inset-top));
+    padding: 20px 32px;
+    max-width: 1200px; margin: 0 auto;
   }
-  .top button {
-    background: rgba(0,0,0,.4); border: none; color: #fff;
-    width: 42px; height: 42px; border-radius: 50%; font-size: 17px;
-    cursor: pointer; backdrop-filter: blur(12px);
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 800; font-size: 18px; letter-spacing: -.02em;
+  }
+  .brand-mark {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, #00d4ff, #a78bfa);
     display: flex; align-items: center; justify-content: center;
-    touch-action: manipulation;
+    color: #000; font-size: 18px; font-weight: 900;
+  }
+  .nav-links {
+    display: flex; gap: 28px; align-items: center;
+    font-size: 14px; color: #8a8a92;
+  }
+  .nav-links a:hover { color: #f5f5f7; }
+  .nav-cta {
+    background: #00d4ff; color: #000;
+    padding: 10px 18px; border-radius: 999px;
+    font-weight: 700; font-size: 13px;
   }
 
-  .rec-indicator {
-    position: fixed; top: max(20px, env(safe-area-inset-top));
-    left: 50%; transform: translateX(-50%);
-    display: none; align-items: center; gap: 8px;
-    background: rgba(0,0,0,.6); padding: 6px 14px; border-radius: 999px;
-    font-size: 13px; font-weight: 700; letter-spacing: .05em;
-    backdrop-filter: blur(10px); z-index: 20;
+  /* Hero */
+  .hero {
+    max-width: 900px; margin: 60px auto 40px;
+    padding: 0 32px; text-align: center;
   }
-  .rec-indicator.show { display: flex; }
-  .rec-dot {
-    width: 9px; height: 9px; border-radius: 50%; background: #ff3b30;
-    animation: recPulse 1s ease-in-out infinite;
+  .hero h1 {
+    font-size: clamp(36px, 6vw, 64px);
+    line-height: 1.05; letter-spacing: -.03em;
+    font-weight: 800;
+    background: linear-gradient(180deg, #fff, #8a8a92);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
-  @keyframes recPulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
+  .hero .accent {
+    background: linear-gradient(135deg, #00d4ff, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero p {
+    font-size: 17px; color: #8a8a92;
+    margin-top: 20px; line-height: 1.5;
   }
 
-  .controls-row {
-    position: fixed; bottom: 200px; left: 0; right: 0;
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 0 20px; z-index: 10;
-    pointer-events: none;
+  /* Upload zone */
+  .upload-zone {
+    max-width: 720px; margin: 40px auto;
+    padding: 0 32px;
   }
-  .controls-row > * { pointer-events: auto; }
-
-  .flash-toggle {
-    background: rgba(0,0,0,.5); color: rgba(255,255,255,.7);
-    border: 1px solid rgba(255,255,255,.2);
-    padding: 9px 14px; border-radius: 999px;
-    font-size: 10px; font-weight: 700; letter-spacing: .1em;
-    backdrop-filter: blur(10px); cursor: pointer;
-    display: flex; align-items: center; gap: 8px;
-    text-transform: uppercase;
+  .drop-area {
+    border: 2px dashed rgba(255,255,255,.15);
+    border-radius: 20px;
+    padding: 60px 30px;
+    text-align: center;
+    background: rgba(255,255,255,.02);
     transition: all .2s;
-    touch-action: manipulation;
+    cursor: pointer;
+    position: relative;
   }
-  .flash-toggle .dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: rgba(255,255,255,.4);
-    transition: background .2s;
+  .drop-area:hover, .drop-area.dragover {
+    border-color: #00d4ff;
+    background: rgba(0,212,255,.05);
   }
-  .flash-toggle.active {
-    background: #ffb800; color: #000; border-color: #ffb800;
+  .drop-area input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer;
   }
-  .flash-toggle.active .dot { background: #000; }
-
-  .zoom { display: flex; gap: 8px; }
-  .zoom button {
-    width: 42px; height: 42px; border-radius: 50%;
-    background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.15);
-    color: #fff; font-size: 11px; font-weight: 600;
-    backdrop-filter: blur(10px); cursor: pointer;
-    transition: all .2s; touch-action: manipulation;
-  }
-  .zoom button.active { background: #ffb800; color: #000; border-color: #ffb800; }
-
-  .modes {
-    position: fixed; bottom: 148px; left: 0; right: 0;
-    display: flex; justify-content: center; gap: 8px;
-    z-index: 10; pointer-events: none;
-  }
-  .modes span {
-    pointer-events: auto;
-    color: rgba(255,255,255,.55); text-transform: uppercase;
-    font-size: 11px; font-weight: 700; letter-spacing: .12em;
-    padding: 10px 14px; border-radius: 999px;
-    cursor: pointer; transition: color .2s, background .2s;
-    touch-action: manipulation;
-  }
-  .modes span.active { color: #ffb800; background: rgba(255,184,0,.12); }
-
-  .bottom {
-    position: fixed; bottom: 0; left: 0; right: 0;
-    padding: 24px 0 calc(36px + env(safe-area-inset-bottom));
-    display: flex; justify-content: space-between; align-items: center;
-    padding-left: 40px; padding-right: 40px;
-    z-index: 10; pointer-events: none;
-  }
-  .bottom > * { pointer-events: auto; }
-
-  .thumb {
-    width: 52px; height: 52px; border-radius: 10px;
-    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25);
-    overflow: hidden; cursor: pointer;
+  .drop-icon {
+    width: 56px; height: 56px; margin: 0 auto 20px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #00d4ff22, #a78bfa22);
     display: flex; align-items: center; justify-content: center;
-    font-size: 10px; color: rgba(255,255,255,.5);
+    font-size: 24px;
+  }
+  .drop-title {
+    font-size: 20px; font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .drop-sub {
+    font-size: 14px; color: #8a8a92;
+    margin-bottom: 24px;
+  }
+  .btn-row {
+    display: flex; gap: 12px; justify-content: center;
+    flex-wrap: wrap;
+  }
+  .btn {
+    padding: 14px 24px;
+    border-radius: 999px;
+    border: none; cursor: pointer;
+    font-size: 14px; font-weight: 700;
+    transition: all .15s;
     touch-action: manipulation;
+    font-family: inherit;
   }
-  .thumb img, .thumb video { width: 100%; height: 100%; object-fit: cover; }
+  .btn-primary {
+    background: #00d4ff; color: #000;
+  }
+  .btn-primary:hover { background: #22ddff; }
+  .btn-secondary {
+    background: rgba(255,255,255,.08); color: #fff;
+    border: 1px solid rgba(255,255,255,.12);
+  }
+  .btn-secondary:hover { background: rgba(255,255,255,.14); }
 
-  .shutter {
-    width: 78px; height: 78px; border-radius: 50%;
-    background: #fff; border: 4px solid rgba(255,255,255,.35);
-    cursor: pointer; transition: transform .1s, background .2s, border-color .2s;
-    position: relative; touch-action: manipulation;
+  /* Features */
+  .features {
+    max-width: 1100px; margin: 100px auto 60px;
+    padding: 0 32px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
   }
-  .shutter::before { content: ''; position: absolute; inset: -20px; border-radius: 50%; }
-  .shutter:active { transform: scale(.9); }
-
-  .shutter.video { background: #ff3b30; border-color: rgba(255,255,255,.5); }
-  .shutter.recording {
-    background: #ff3b30; border-color: #fff;
-    animation: shutterPulse 1.2s ease-in-out infinite;
+  .feature {
+    background: #141416;
+    border: 1px solid #23232a;
+    border-radius: 16px;
+    padding: 28px 24px;
   }
-  .shutter.recording::after {
-    content: ''; position: absolute; inset: 18px; border-radius: 8px;
-    background: #fff;
-  }
-  @keyframes shutterPulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(.94); }
-  }
-
-  .flip {
-    width: 52px; height: 52px; border-radius: 50%;
-    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25);
-    color: #fff; font-size: 20px; cursor: pointer;
-    backdrop-filter: blur(12px);
+  .feature-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: linear-gradient(135deg, #00d4ff22, #a78bfa22);
     display: flex; align-items: center; justify-content: center;
-    touch-action: manipulation;
+    font-size: 18px; margin-bottom: 16px;
   }
+  .feature h3 { font-size: 15px; margin-bottom: 8px; }
+  .feature p { font-size: 13px; color: #8a8a92; line-height: 1.5; }
 
-  .toast {
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
-    background: rgba(0,0,0,.85); padding: 12px 22px; border-radius: 12px;
-    font-size: 14px; z-index: 100; pointer-events: none;
-    transition: opacity .3s; backdrop-filter: blur(10px);
-    text-align: center; max-width: 80vw;
+  /* Footer */
+  footer {
+    padding: 40px 32px;
+    text-align: center;
+    color: #555;
+    font-size: 13px;
+    border-top: 1px solid #23232a;
+    margin-top: 60px;
   }
-  .toast.hide { opacity: 0; }
-
-  @media (max-height: 700px) {
-    .controls-row { bottom: 180px; }
-    .modes { bottom: 132px; }
-  }
-  .review-overlay {
-  position: fixed; inset: 0;
-  background: #000;
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-  padding: 20px;
-  padding-bottom: calc(20px + env(safe-area-inset-bottom));
-}
-.review-overlay.show { display: flex; }
-
-.review-overlay video,
-.review-overlay img {
-  max-width: 100%;
-  max-height: 75vh;
-  border-radius: 12px;
-  background: #111;
-}
-.review-overlay img { display: none; }
-.review-overlay.video-mode img { display: none; }
-.review-overlay.photo-mode video { display: none; }
-.review-overlay.photo-mode img { display: block; }
-
-.review-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 24px;
-  width: 100%;
-  max-width: 340px;
-}
-.review-btn {
-  flex: 1;
-  padding: 14px 20px;
-  border-radius: 12px;
-  border: none;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: opacity .15s;
-}
-.review-btn:active { opacity: .7; }
-.review-btn.retake {
-  background: rgba(255,255,255,.12);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,.25);
-}
-.review-btn.save {
-  background: #ffb800;
-  color: #000;
-}
-.shutter.slowmo {
-  background: #34c759; border-color: rgba(255,255,255,.5);
-}
-.shutter.slowmo.recording {
-  background: #34c759;
-  border-color: #fff;
-  animation: shutterPulse 1.2s ease-in-out infinite;
-}
-.shutter.slowmo.recording::after {
-  content: ''; position: absolute; inset: 18px; border-radius: 8px;
-  background: #fff;
-}
-.top button.active { background: #ffb800; color: #000; }
-
-.settings-panel {
-  position: fixed; left: 0; right: 0; bottom: 0;
-  background: rgba(20,20,22,.96);
-  backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(255,255,255,.1);
-  padding: 20px 24px calc(28px + env(safe-area-inset-bottom));
-  z-index: 60;
-  transform: translateY(100%);
-  transition: transform .25s ease;
-  border-radius: 20px 20px 0 0;
-}
-.settings-panel.show { transform: translateY(0); }
-
-.settings-head {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 18px;
-}
-.settings-head h3 {
-  font-size: 14px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: #fff;
-}
-.settings-head .close {
-  background: rgba(255,255,255,.1); border: none; color: #fff;
-  width: 32px; height: 32px; border-radius: 50%; font-size: 15px;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  touch-action: manipulation;
-}
-
-.settings-row {
-  display: flex; align-items: center; gap: 14px;
-  margin-bottom: 16px;
-}
-.settings-row label {
-  font-size: 11px; font-weight: 700; letter-spacing: .08em;
-  text-transform: uppercase; color: rgba(255,255,255,.55);
-  min-width: 70px;
-}
-.settings-row input[type=range] {
-  flex: 1; accent-color: #ffb800; height: 4px;
-}
-.settings-row .val {
-  font-size: 12px; font-weight: 700; color: #ffb800;
-  min-width: 55px; text-align: right;
-}
-
-.toggle-row { justify-content: space-between; }
-
-.switch {
-  position: relative; width: 46px; height: 28px;
-  background: rgba(255,255,255,.15);
-  border: none; border-radius: 999px; cursor: pointer;
-  transition: background .2s; touch-action: manipulation;
-  padding: 0;
-}
-.switch.on { background: #ffb800; }
-.switch-knob {
-  position: absolute; top: 3px; left: 3px;
-  width: 22px; height: 22px; border-radius: 50%;
-  background: #fff; transition: transform .2s;
-  box-shadow: 0 1px 3px rgba(0,0,0,.3);
-}
-.switch.on .switch-knob { transform: translateX(18px); background: #000; }
-
-.settings-actions {
-  display: flex; gap: 10px; margin-top: 20px;
-}
-.settings-btn {
-  flex: 1; padding: 12px;
-  border-radius: 12px; border: none;
-  font-size: 12px; font-weight: 700; letter-spacing: .08em;
-  text-transform: uppercase; cursor: pointer;
-  touch-action: manipulation;
-}
-.settings-btn.reset {
-  background: rgba(255,255,255,.1); color: #fff;
-}
-.settings-btn.done { background: #ffb800; color: #000; }
-.install-prompt {
-  position: fixed;
-  bottom: 100px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(20, 20, 22, 0.95);
-  backdrop-filter: blur(12px);
-  padding: 12px 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  z-index: 9999;
-  display: none;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  max-width: 90vw;
-  pointer-events: auto;
-}
-.install-prompt.show {
-  display: flex;
-}
-.install-prompt button {
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: none;
-  font-weight: 700;
-  font-size: 12px;
-  cursor: pointer;
-  touch-action: manipulation;    /* <-- add this */
-  -webkit-user-select: none;
-}
-#installBtn { background: #ffb800; color: #000; }
-#dismissBtn { background: rgba(255,255,255,0.1); color: #fff; }
-.flash-overlay {
-  position: fixed; inset: 0; background: #ffffff; opacity: 0;
-  pointer-events: none; z-index: 50;
-  transition: opacity .04s;
-}
-.flash-overlay.on { opacity: 1; }
-.flash-panel {
-  position: fixed; left: 0; right: 0; bottom: 0;
-  background: rgba(20,20,22,.96);
-  backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(255,255,255,.1);
-  padding: 20px 24px calc(28px + env(safe-area-inset-bottom));
-  z-index: 70;
-  transform: translateY(100%);
-  transition: transform .25s ease;
-  border-radius: 20px 20px 0 0;
-}
-.flash-panel.show { transform: translateY(0); }
-
-.flash-head {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 18px;
-}
-.flash-head h3 {
-  font-size: 14px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: #fff;
-}
-.flash-head .close {
-  background: rgba(255,255,255,.1); border: none; color: #fff;
-  width: 32px; height: 32px; border-radius: 50%; font-size: 15px;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  touch-action: manipulation;
-}
-
-.flash-row {
-  display: flex; align-items: center; gap: 14px;
-  margin-bottom: 10px;
-}
-.flash-row input[type=range] {
-  flex: 1; accent-color: #ffb800; height: 4px;
-}
-.flash-row .val {
-  font-size: 14px; font-weight: 700; color: #ffb800;
-  min-width: 50px; text-align: right;
-}
-
-.flash-hint {
-  font-size: 11px;
-  color: rgba(255,255,255,.4);
-  margin-bottom: 20px;
-  line-height: 1.4;
-}
-
-.flash-actions {
-  display: flex; gap: 10px;
-}
-.flash-btn {
-  flex: 1; padding: 12px;
-  border-radius: 12px; border: none;
-  font-size: 12px; font-weight: 700; letter-spacing: .08em;
-  text-transform: uppercase; cursor: pointer;
-  touch-action: manipulation;
-}
-.flash-btn.reset {
-  background: rgba(255,255,255,.1); color: #fff;
-}
-.flash-btn.done { background: #ffb800; color: #000; }
-
-.review-btn.edit {
-  background: rgba(255,255,255,.15);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,.3);
-}
 </style>
 </head>
 <body>
 
-
-<video id="video" autoplay playsinline muted></video>
-<div class="flash-overlay" id="flashOverlay"></div>
-
-<div class="top">
-  <button id="settingsBtn" title="Settings">⚙</button>
-</div>
-
-<div class="rec-indicator" id="recIndicator">
-  <span class="rec-dot"></span>
-  <span id="recTime">00:00</span>
-</div>
-
-<div class="controls-row">
-  <button class="flash-toggle" id="flashToggle">
-    <span class="dot"></span>
-    <span id="flashLabel">Enable Flash Shot</span>
-  </button>
-  <div class="zoom" id="zoomBar">
-    <button data-zoom="1" class="active">1×</button>
-    <button data-zoom="2">2×</button>
-    <button data-zoom="3">3×</button>
+<nav class="nav">
+  <div class="brand">
+    <div class="brand-mark">R</div>
+    <span>Rendar</span>
   </div>
-</div>
-
-<div class="modes" id="modes">
-  <span data-mode="photo" class="active">Photo</span>
-  <span data-mode="portrait">Portrait</span>
-  <span data-mode="video">Video</span>
-  <span data-mode="slowmo">Slow Mo</span>
-</div>
-
-<div class="bottom">
-  <div class="thumb" id="thumb">No shots</div>
-  <button class="shutter" id="shutter" aria-label="Capture"></button>
-  <button class="flip" id="flip">🔄</button>
-</div>
-
-<div class="review-overlay" id="reviewOverlay">
-  <video id="reviewVideo" playsinline controls loop></video>
-  <img id="reviewImage" alt="" />
-  <div class="review-actions">
-    <button class="review-btn retake" id="retakeBtn">Retake</button>
-    <button class="review-btn edit" id="editBtn">Edit</button>
-    <button class="review-btn save" id="saveBtn">Save</button>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="/editor.html" class="nav-cta">Open Editor</a>
   </div>
-</div>
+</nav>
 
-<div class="settings-panel" id="settingsPanel">
-  <div class="settings-head">
-    <h3>Lighting</h3>
-    <button class="close" id="settingsClose">✕</button>
+<section class="hero">
+  <h1>Edit photos.<br><span class="accent">Right in your browser.</span></h1>
+  <p>Upload an image, tweak it with brightness, contrast, filters, text and more. No install. No upload to a server. Everything runs on your device.</p>
+</section>
+
+<section class="upload-zone">
+  <div class="drop-area" id="dropArea">
+    <input type="file" id="fileInput" accept="image/*" />
+    <div class="drop-icon">📷</div>
+    <div class="drop-title">Drop an image here</div>
+    <div class="drop-sub">or click to choose from your device</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="browseBtn">Choose Image</button>
+    </div>
   </div>
+</section>
 
-  <div class="settings-row toggle-row">
-    <label>Auto Exposure</label>
-    <button class="switch" id="aeSwitch" aria-label="Toggle auto exposure">
-      <span class="switch-knob"></span>
-    </button>
+<section class="features" id="features">
+  <div class="feature">
+    <div class="feature-icon">☀</div>
+    <h3>Brightness & Contrast</h3>
+    <p>Fine-tune exposure and punch with real-time sliders.</p>
   </div>
-
-  <div class="settings-row">
-    <label>Brightness</label>
-    <input type="range" id="brightnessSlider" min="-2" max="2" step="0.1" value="0" />
-    <span class="val" id="brightnessVal">0.0 EV</span>
+  <div class="feature">
+    <div class="feature-icon">🎨</div>
+    <h3>Filters</h3>
+    <p>Black & white, sepia, vintage, warm, cool — one tap each.</p>
   </div>
-
-  <div class="settings-row">
-    <label>Contrast</label>
-    <input type="range" id="contrastSlider" min="0.5" max="2" step="0.05" value="1" />
-    <span class="val" id="contrastVal">1.00×</span>
+  <div class="feature">
+    <div class="feature-icon">T</div>
+    <h3>Text Overlay</h3>
+    <p>Add captions and drag them anywhere on the image.</p>
   </div>
-
-  <div class="settings-actions">
-    <button class="settings-btn reset" id="lightingReset">Reset</button>
-    <button class="settings-btn done" id="settingsDone">Done</button>
+  <div class="feature">
+    <div class="feature-icon">✂</div>
+    <h3>Crop & Rotate</h3>
+    <p>Reshape your photo without losing quality.</p>
   </div>
-</div>
-
-
-<div class="toast hide" id="toast"></div>
-<canvas id="canvas" hidden></canvas>
-
-<div class="install-prompt" id="installPrompt">  <span>Install CamShot as an app?</span>
-  <button id="installBtn">Install</button>
-  <button id="dismissBtn">Not now</button>
-</div>
-
-<div class="flash-panel" id="flashPanel">
-  <div class="flash-head">
-    <h3>Flash Power</h3>
-    <button class="close" id="flashClose">✕</button>
+  <div class="feature">
+    <div class="feature-icon">🎯</div>
+    <h3>Blur</h3>
+    <p>Soften the whole image or add depth with blur.</p>
   </div>
-
-  <div class="flash-row">
-    <input type="range" id="flashPowerSlider" min="1" max="100" step="1" value="100" />
-    <span class="val" id="flashPowerVal">100%</span>
+  <div class="feature">
+    <div class="feature-icon">↓</div>
+    <h3>Download</h3>
+    <p>Save as PNG or JPG at full resolution, ready to share.</p>
   </div>
+</section>
 
-  <div class="flash-hint" id="flashHint">
-    Lower the value if the flash is overpowering your shot.
-  </div>
+<footer>
+  © <span id="year"></span> Rendar · Built with care
+</footer>
 
-  <div class="flash-actions">
-    <button class="flash-btn reset" id="flashReset">Reset</button>
-    <button class="flash-btn done" id="flashDone">Done</button>
-  </div>
-</div>
- 
- <script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js');
-  }
+<script>
+document.getElementById('year').textContent = new Date().getFullYear();
 
+const fileInput = document.getElementById('fileInput');
+const dropArea = document.getElementById('dropArea');
+const browseBtn = document.getElementById('browseBtn');
 
-/* ============================================================
-   INSTALL PROMPT
-   ============================================================ */
-let deferredPrompt = null;
-const installPrompt = document.getElementById('installPrompt');
-const installBtn = document.getElementById('installBtn');
-const dismissBtn = document.getElementById('dismissBtn');
-
-window.addEventListener('beforeinstallprompt', (e) => {
+browseBtn.addEventListener('click', (e) => {
   e.preventDefault();
-  deferredPrompt = e;
-  installPrompt.classList.add('show');
-  console.log('Install prompt available');
+  fileInput.click();
 });
 
-window.addEventListener('appinstalled', () => {
-  installPrompt.classList.remove('show');
-  deferredPrompt = null;
-  showToast('CamShot installed 🎉');
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  openEditor(file);
 });
 
-installBtn.addEventListener('click', async (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  console.log('Install clicked, deferredPrompt =', !!deferredPrompt);
-
-  if (!deferredPrompt) {
-    showToast('Install not available — use Chrome menu → Install app');
-    return;
-  }
-
-  try {
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    console.log('Install outcome:', outcome);
-    deferredPrompt = null;
-    installPrompt.classList.remove('show');
-  } catch (err) {
-    console.error('Install failed:', err);
-    showToast('Install failed: ' + err.message);
-  }
-});
-
-dismissBtn.addEventListener('click', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  console.log('Dismiss clicked');
-  installPrompt.classList.remove('show');
-  deferredPrompt = null;
-});
-
-
-
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const shutter = document.getElementById('shutter');
-const flip = document.getElementById('flip');
-const thumb = document.getElementById('thumb');
-const toast = document.getElementById('toast');
-const modes = document.querySelectorAll('.modes span');
-const flashToggle = document.getElementById('flashToggle');
-const flashLabel = document.getElementById('flashLabel');
-const flashOverlay = document.getElementById('flashOverlay');
-const zoomBar = document.getElementById('zoomBar');
-const recIndicator = document.getElementById('recIndicator');
-const recTime = document.getElementById('recTime');
-const reviewOverlay = document.getElementById('reviewOverlay');
-const reviewVideo = document.getElementById('reviewVideo');
-const reviewImage = document.getElementById('reviewImage');
-const retakeBtn = document.getElementById('retakeBtn');
-const saveBtn = document.getElementById('saveBtn');
-
-let flashEnabled = false;
-let stream, facingMode = 'user', mode = 'photo';
-let zoom = 1, track = null, hasTorch = false;
-let mediaRecorder = null;
-let recordedChunks = [];
-let isRecording = false;
-let recStartTime = 0;
-let recTimerInterval = null;
-let hardwareZoomSupported = false;
-
-let flashSettings = {
-  power: 100,
-  duration: 250,
-  grade: 'neutral'
-};
-
-
-function showToast(msg, ms = 1800) {
-  toast.textContent = msg;
-  toast.classList.remove('hide');
-  clearTimeout(showToast._t);
-  showToast._t = setTimeout(() => toast.classList.add('hide'), ms);
-}
-
-function updateFlashUI() {
-  flashToggle.classList.toggle('active', flashEnabled);
-  flashLabel.textContent = flashEnabled
-    ? `Flash ${flashSettings.power}%`
-    : 'Enable Flash Shot';
-}
-
-function buildConstraints() {
-  const base = {
-    facingMode: { ideal: facingMode },
-    width:  { ideal: 1280 },
-    height: { ideal: 720 }
-  };
-
-  // Slow-mo: ask for 60fps so we can play it back at 0.5×
-  if (mode === 'slowmo') {
-    base.frameRate = { ideal: 60, min: 30 };
-  } else {
-    base.frameRate = { ideal: 30 };
-  }
-
-  return { video: base, audio: true };
-}
-
-function resetVideoTransform() {
-  video.style.transform = '';
-  video.style.transformOrigin = '';
-  video.style.transition = '';
-}
-
-async function startCamera() {
-  if (stream) stream.getTracks().forEach(t => t.stop());
-  resetVideoTransform();
-
-  try {
-    stream = await navigator.mediaDevices.getUserMedia(buildConstraints());
-  } catch (e) {
-    console.warn('Camera+mic failed, trying video only', e);
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facingMode } }
-      });
-    } catch (e2) {
-      console.error('Camera failed entirely', e2);
-      showToast('Camera access failed — check permissions', 3000);
-      return;
-    }
-  }
-
-  video.srcObject = stream;
-  await new Promise(resolve => {
-    if (video.videoWidth > 0) return resolve();
-    video.onloadedmetadata = () => resolve();
-  });
-
-  track = stream.getVideoTracks()[0];
-  const caps = track.getCapabilities?.() || {};
-  hasTorch = !!caps.torch;
-  hardwareZoomSupported = !!caps.zoom;
-
-  // Let the user know if true slow-mo isn't available
-  if (mode === 'slowmo') {
-    const settings = track.getSettings?.() || {};
-    const fps = settings.frameRate || 0;
-    if (fps < 45) {
-      showToast('Slow-mo: camera only gives ' + Math.round(fps) + 'fps — playback will still be 0.5×', 3000);
-    }
-  }
-
-    applyZoom();
-  startAutoExposure();
-}
-function applyZoom() {
-  if (!track) return;
-  const caps = track.getCapabilities?.() || {};
-  hardwareZoomSupported = !!caps.zoom;
-
-  if (hardwareZoomSupported) {
-    const z = Math.min(Math.max(zoom, caps.zoom.min || 1), caps.zoom.max || 3);
-    track.applyConstraints({ advanced: [{ zoom: z }] }).catch(() => {});
-    video.style.transform = '';
-  } else {
-    video.style.transformOrigin = 'center center';
-    video.style.transform = `scale(${zoom})`;
-    video.style.transition = 'transform .2s ease';
-  }
-}
-
-async function setTorch(on) {
-  if (!track || !hasTorch) return false;
-  try { await track.applyConstraints({ advanced: [{ torch: on }] }); return true; }
-  catch { return false; }
-}
-
-/* ============================================================
-   CLARITY + BRIGHTNESS — kills grain, sharpens, AND lifts exposure
-   ============================================================ */
-
-// Separable box blur
-function boxBlur(src, w, h, radius) {
-  const r = Math.max(1, radius);
-  const tmp = new Uint8ClampedArray(src.length);
-
-  for (let y = 0; y < h; y++) {
-    let rS = 0, gS = 0, bS = 0, n = 0;
-    const maxX = Math.min(r, w - 1);
-    for (let x = 0; x <= maxX; x++) {
-      const j = (y * w + x) * 4;
-      rS += src[j]; gS += src[j+1]; bS += src[j+2]; n++;
-    }
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      tmp[i] = rS/n; tmp[i+1] = gS/n; tmp[i+2] = bS/n; tmp[i+3] = 255;
-      const outX = x - r, inX = x + r + 1;
-      if (outX >= 0) { const j = (y*w+outX)*4; rS -= src[j]; gS -= src[j+1]; bS -= src[j+2]; n--; }
-      if (inX < w)   { const j = (y*w+inX)*4; rS += src[j]; gS += src[j+1]; bS += src[j+2]; n++; }
-    }
-  }
-
-  const out = new Uint8ClampedArray(src.length);
-  for (let x = 0; x < w; x++) {
-    let rS = 0, gS = 0, bS = 0, n = 0;
-    const maxY = Math.min(r, h - 1);
-    for (let y = 0; y <= maxY; y++) {
-      const j = (y * w + x) * 4;
-      rS += tmp[j]; gS += tmp[j+1]; bS += tmp[j+2]; n++;
-    }
-    for (let y = 0; y < h; y++) {
-      const i = (y * w + x) * 4;
-      out[i] = rS/n; out[i+1] = gS/n; out[i+2] = bS/n; out[i+3] = 255;
-      const outY = y - r, inY = y + r + 1;
-      if (outY >= 0) { const j = (outY*w+x)*4; rS -= tmp[j]; gS -= tmp[j+1]; bS -= tmp[j+2]; n--; }
-      if (inY < h)   { const j = (inY*w+x)*4; rS += tmp[j]; gS += tmp[j+1]; bS += tmp[j+2]; n++; }
-    }
-  }
-  return out;
-}
-
-// Bilateral-style denoise — kills colored grain while preserving edges
-function killGrain(ctx, w, h, strength = 1.0) {
-  const src = ctx.getImageData(0, 0, w, h);
-  const s = src.data;
-  const out = ctx.createImageData(w, h);
-  const o = out.data;
-  const sigmaColor = 20 * strength;
-
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      const r0 = s[i], g0 = s[i+1], b0 = s[i+2];
-      let rS = 0, gS = 0, bS = 0, wS = 0;
-
-      for (let dy = -1; dy <= 1; dy++) {
-        const ny = y + dy;
-        if (ny < 0 || ny >= h) continue;
-        for (let dx = -1; dx <= 1; dx++) {
-          const nx = x + dx;
-          if (nx < 0 || nx >= w) continue;
-          const j = (ny * w + nx) * 4;
-          const r1 = s[j], g1 = s[j+1], b1 = s[j+2];
-          const cd = Math.abs(r0 - r1) + Math.abs(g0 - g1) + Math.abs(b0 - b1);
-          const wt = Math.exp(-(cd * cd) / (2 * sigmaColor * sigmaColor));
-          rS += r1 * wt; gS += g1 * wt; bS += b1 * wt; wS += wt;
-        }
-      }
-      o[i] = rS / wS; o[i+1] = gS / wS; o[i+2] = bS / wS; o[i+3] = 255;
-    }
-  }
-  ctx.putImageData(out, 0, 0);
-}
-
-// Sharpen (unsharp mask)
-function sharpen(ctx, w, h, amount = 0.8, radius = 1) {
-  const src = ctx.getImageData(0, 0, w, h);
-  const s = src.data;
-  const blurred = boxBlur(s, w, h, radius);
-  for (let i = 0; i < s.length; i += 4) {
-    for (let c = 0; c < 3; c++) {
-      const v = s[i + c] + amount * (s[i + c] - blurred[i + c]);
-      s[i + c] = v < 0 ? 0 : v > 255 ? 255 : v;
-    }
-  }
-  ctx.putImageData(src, 0, 0);
-}
-
-// ---- SINGLE TONE MAP: auto-levels + shadow lift in one LUT ----
-// Analyzes the image, finds what range the pixels actually occupy,
-// stretches that range across 0-255, then lifts shadows gently.
-// This is the "correct" way to fix a dark image — it doesn't blow out.
-function autoToneMap(ctx, w, h, shadowLift = 0.25, highlightCompress = 0.75) {
-  const img = ctx.getImageData(0, 0, w, h);
-  const d = img.data;
-
-  // 0. Measure current average brightness — decides which path we take
-  let sum = 0, count = 0;
-  for (let i = 0; i < d.length; i += 32) {
-    sum += 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-    count++;
-  }
-  const avg = sum / count;   // 0..255
-
-  const lut = new Uint8ClampedArray(256);
-
-  if (avg > 120) {
-    // ============================================
-    // BRIGHT SCENE — don't stretch, just recover highlights
-    // ============================================
-    // severity ramps 0 → 1 as avg goes from 120 → 200
-    const severity = Math.min(1, (avg - 120) / 80);
-
-    // How hard to compress highlights: 0.3 (mild) → 0.7 (strong)
-    const pull = 0.3 + severity * 0.4;
-
-    // Overall brightness drop so a blown image isn't blindingly white
-    const globalDrop = severity * 0.08;   // up to -8%
-
-    for (let v = 0; v < 256; v++) {
-      let x = v / 255;
-
-      // Global pull — reduces overall brightness slightly
-      x = Math.max(0, x - globalDrop);
-
-      // Highlight shoulder — compress everything above 0.85
-      if (x > 0.85) {
-        x = 0.85 + (x - 0.85) * (1 - pull);
-      }
-
-      lut[v] = Math.max(0, Math.min(255, x * 255));
-    }
-  } else {
-    // ============================================
-    // DARK / NORMAL SCENE — full auto-levels stretch
-    // ============================================
-
-    // 1. Find the actual luminance range (2nd percentile → 98th percentile)
-    const hist = new Uint32Array(256);
-    for (let i = 0; i < d.length; i += 16) {
-      const lum = (0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2]) | 0;
-      hist[lum]++;
-    }
-    let total = 0;
-    for (let i = 0; i < 256; i++) total += hist[i];
-
-    let cum = 0, lo = 0, hi = 255;
-    for (let i = 0; i < 256; i++) {
-      cum += hist[i];
-      if (cum >= total * 0.02) { lo = i; break; }
-    }
-    cum = 0;
-    for (let i = 255; i >= 0; i--) {
-      cum += hist[i];
-      if (cum >= total * 0.02) { hi = i; break; }
-    }
-
-    // Prevent degenerate ranges (very flat images)
-    if (hi - lo < 20) { lo = 0; hi = 255; }
-
-    // 2. Build LUT: stretch [lo, hi] → [0, 1], lift shadows, compress highlights
-    for (let v = 0; v < 256; v++) {
-      let x = (v - lo) / (hi - lo);
-      x = Math.max(0, Math.min(1, x));
-
-      // Shadow lift on the stretched range
-      if (x < 0.35) {
-        x = x + (0.35 - x) * shadowLift;
-      }
-
-      // Highlight compression — soft rolloff so nothing snaps to white
-      if (x > 0.85) {
-        x = 0.85 + (x - 0.85) * highlightCompress;
-      }
-
-      // Tiny S-curve for punch
-      const s = x * x * (3 - 2 * x);
-      x = x * 0.75 + s * 0.25;
-
-      lut[v] = Math.max(0, Math.min(255, x * 255));
-    }
-  }
-
-  // 3. Apply LUT to every pixel
-  for (let i = 0; i < d.length; i += 4) {
-    d[i]     = lut[d[i]];
-    d[i + 1] = lut[d[i + 1]];
-    d[i + 2] = lut[d[i + 2]];
-  }
-  ctx.putImageData(img, 0, 0);
-}
-
-// Mild local contrast — makes shape pop without over-amplifying
-function localContrast(ctx, w, h, amount = 0.2, radius = 6) {
-  const src = ctx.getImageData(0, 0, w, h);
-  const s = src.data;
-  const blurred = boxBlur(s, w, h, radius);
-  for (let i = 0; i < s.length; i += 4) {
-    for (let c = 0; c < 3; c++) {
-      const v = s[i + c] + amount * (s[i + c] - blurred[i + c]);
-      s[i + c] = Math.max(0, Math.min(255, v));
-    }
-  }
-  ctx.putImageData(src, 0, 0);
-}
-
-// ---- MASTER CLARITY PASS ----
-function makeClearer(ctx, w, h) {
-  const MAX_DIM = 1920;
-  if (Math.max(w, h) > MAX_DIM) {
-    const scale = MAX_DIM / Math.max(w, h);
-    const nw = Math.round(w * scale);
-    const nh = Math.round(h * scale);
-    const tmp = document.createElement('canvas');
-    tmp.width = nw; tmp.height = nh;
-const tctx = tmp.getContext('2d', { willReadFrequently: true });    tctx.drawImage(canvas, 0, 0, nw, nh);
-    canvas.width = nw; canvas.height = nh;
-    ctx.drawImage(tmp, 0, 0);
-    w = nw; h = nh;
-  }
-
-  // 1. Kill grain
-  killGrain(ctx, w, h, 0.9);
-
-  // 2. Auto tone map — brightens AND fixes contrast in one shot
-  autoToneMap(ctx, w, h, 0.25, 0.7);
-
-    // 3. Light local contrast for shape (scaled by user's contrast setting)
-  const userContrast = lightingSettings?.contrast ?? 1;
-  const contrastAmount = 0.2 * userContrast;
-  localContrast(ctx, w, h, contrastAmount, 6);
-
-  // 4. Sharpen
-  sharpen(ctx, w, h, 0.8, 1);
-}
-/* ============================================================
-   CAPTURE — PHOTO / PORTRAIT
-   ============================================================ */
-let capturing = false;
-async function capturePhoto() {
-  if (capturing) return;
-  capturing = true;
-  stopAutoExposure();   // pause AE while we handle flash
-  setTimeout(() => capturing = false, 2500);
-
-  try {
-    let usedTorch = false, usedScreen = false;
-
- if (flashEnabled) {
-  if (hasTorch) {
-    const ok = await setTorch(true);
-    if (ok) {
-      usedTorch = true;
-      // Torch hold time scales with power: 150ms at 1% → 500ms at 100%
-      const torchHold = 150 + (flashSettings.power / 100) * 350;
-      await new Promise(r => setTimeout(r, torchHold));
-    }
-  }
-  if (!usedTorch) {
-    usedScreen = true;
-    flashOverlay.classList.add('on');
-    // Screen flash: opacity and duration both scale with power
-    const overlayOpacity = 0.4 + (flashSettings.power / 100) * 0.6;   // 0.4 → 1.0
-    const flashDuration = 100 + (flashSettings.power / 100) * 300;    // 100ms → 400ms
-    flashOverlay.style.opacity = overlayOpacity;
-    await new Promise(r => setTimeout(r, flashDuration));
-  }
-}
-
-    // Grab the frame (respecting zoom)
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-    if (!hardwareZoomSupported && zoom > 1) {
-      const cropW = vw / zoom;
-      const cropH = vh / zoom;
-      const cropX = (vw - cropW) / 2;
-      const cropY = (vh - cropH) / 2;
-      canvas.width = Math.round(cropW);
-      canvas.height = Math.round(cropH);
-      ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-    } else {
-      canvas.width = vw;
-      canvas.height = vh;
-      ctx.drawImage(video, 0, 0);
-    }
-
-   if (usedTorch) await setTorch(false);
-if (usedScreen) {
-  setTimeout(() => {
-    flashOverlay.classList.remove('on');
-    flashOverlay.style.opacity = '';   // clear inline opacity
-  }, 120);
-}
-    // Pipeline
-    try { makeClearer(ctx, canvas.width, canvas.height); }
-    catch (e) { console.warn('Clarity failed', e); }
-
-    if (flashEnabled) {
-      try { applyFlashToFrame(ctx, canvas.width, canvas.height); }
-      catch (e) { console.warn('Flash grade failed', e); }
-    }
-
-    if (mode === 'portrait') {
-      applyPortraitBlur(ctx, canvas.width, canvas.height);
-    }
-
-    const url = canvas.toDataURL('image/jpeg', 0.95);
-
-    // ---- Hand off to the review overlay ----
-    pendingCapture = { type: 'photo', url, mode };
-
-    reviewOverlay.classList.remove('video-mode');
-    reviewOverlay.classList.add('photo-mode');
-    reviewImage.src = url;
-    reviewOverlay.classList.add('show');
-
-  } catch (err) {
-    console.error('Capture failed:', err);
-    showToast('Capture failed: ' + err.message, 3000);
-  } finally {
-    capturing = false;
-  }
-    startAutoExposure();  // resume AE
-}
-
-function applyPortraitBlur(ctx, w, h) {
-  // Middle-ground blur — noticeably blurry background but not overdone.
-  // Scales with image size so it looks consistent at any resolution.
-  const blurPx = Math.round(Math.max(5, Math.min(11, Math.max(w, h) / 180)));
-
-  const sharp = document.createElement('canvas');
-  sharp.width = w; sharp.height = h;
-  sharp.getContext('2d', { willReadFrequently: true }).drawImage(canvas, 0, 0);
-  // Subject area — same wide ellipse as before so you stay sharp
-  const cx = w / 2, cy = h * 0.52;
-  const rx = w * 0.38;
-  const ry = h * 0.55;
-
-  const maskCanvas = document.createElement('canvas');
-  maskCanvas.width = w; maskCanvas.height = h;
-  const mctx = maskCanvas.getContext('2d', { willReadFrequently: true });
-  const grad = mctx.createRadialGradient(
-    cx, cy, Math.min(rx, ry) * 0.6,
-    cx, cy, Math.max(rx, ry)
-  );
-  grad.addColorStop(0,    'rgba(0,0,0,1)');
-  grad.addColorStop(0.55, 'rgba(0,0,0,0.95)');
-  grad.addColorStop(0.85, 'rgba(0,0,0,0.4)');
-  grad.addColorStop(1,    'rgba(0,0,0,0)');
-
-  mctx.fillStyle = grad;
-  mctx.beginPath();
-  mctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-  mctx.fill();
-
-  const layer = document.createElement('canvas');
-  layer.width = w; layer.height = h;
-  const lctx = layer.getContext('2d', { willReadFrequently: true });  lctx.drawImage(sharp, 0, 0);
-  lctx.globalCompositeOperation = 'destination-in';
-  lctx.drawImage(maskCanvas, 0, 0);
-
-  ctx.clearRect(0, 0, w, h);
-  ctx.filter = `blur(${blurPx}px)`;
-  ctx.drawImage(sharp, 0, 0);
-  ctx.filter = 'none';
-  ctx.drawImage(layer, 0, 0);
-}
-
-/* ============================================================
-   VIDEO RECORDING
-   ============================================================ */
-function pickMimeType() {
-  const types = [
-    'video/mp4;codecs=h264',
-    'video/mp4',
-    'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp9',
-    'video/webm;codecs=vp8',
-    'video/webm'
-  ];
-  for (const t of types) {
-    if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
-  }
-  return '';
-}
-
-function startRecording() {
-  if (!stream) return;
-  recordedChunks = [];
-  const mimeType = pickMimeType();
-  const opts = mimeType ? { mimeType } : undefined;
-
-  try { mediaRecorder = new MediaRecorder(stream, opts); }
-  catch (e) { showToast('Recording not supported'); return; }
-
-  mediaRecorder.ondataavailable = (e) => {
-    if (e.data && e.data.size > 0) recordedChunks.push(e.data);
-  };
-
-  mediaRecorder.onstop = () => {
-    const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
-    const url = URL.createObjectURL(blob);
-    const isSlowMo = mode === 'slowmo';
-
-    pendingCapture = {
-      type: 'video',
-      url,
-      mime: mediaRecorder.mimeType || 'video/webm',
-      slowmo: isSlowMo
-    };
-
-    reviewOverlay.classList.remove('photo-mode');
-    reviewOverlay.classList.add('video-mode');
-    reviewVideo.src = url;
-    reviewVideo.playbackRate = isSlowMo ? 0.5 : 1;
-    reviewOverlay.classList.add('show');
-  };
-
-  mediaRecorder.start();
-  isRecording = true;
-  recStartTime = Date.now();
-  shutter.classList.add('recording');
-  recIndicator.classList.add('show');
-
-  recTimerInterval = setInterval(() => {
-    const elapsed = Math.floor((Date.now() - recStartTime) / 1000);
-    const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
-    const s = String(elapsed % 60).padStart(2, '0');
-    recTime.textContent = `${m}:${s}`;
-  }, 250);
-  recTime.textContent = '00:00';
-
-  if (flashEnabled) {
-    if (hasTorch) setTorch(true);
-    else {
-      const opacity = 0.15 + (flashSettings.power / 100) * 0.35;
-      flashOverlay.style.transition = 'opacity .3s';
-      flashOverlay.style.opacity = opacity;
-      flashOverlay.classList.add('on');
-    }
-  }
-}
-
-function stopRecording() {
-  if (!mediaRecorder || !isRecording) return;
-  try { mediaRecorder.stop(); } catch {}
-  isRecording = false;
-  shutter.classList.remove('recording');
-  recIndicator.classList.remove('show');
-  clearInterval(recTimerInterval);
-  recTimerInterval = null;
-
-  if (hasTorch) setTorch(false);
-  if (flashOverlay.classList.contains('on')) {
-    flashOverlay.classList.remove('on');
-    flashOverlay.style.opacity = '';
-    flashOverlay.style.transition = '';
-  }
-}
-
-/* ============================================================
-   REVIEW OVERLAY HELPERS
-   ============================================================ */
-let pendingCapture = null;
-
-function hideReview() {
-  reviewOverlay.classList.remove('show');
-  reviewVideo.pause();
-  reviewVideo.src = '';
-  reviewImage.src = '';
-}
-
-retakeBtn.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  if (pendingCapture?.type === 'video') {
-    URL.revokeObjectURL(pendingCapture.url);
-  }
-  pendingCapture = null;
-  hideReview();
-});
-
-saveBtn.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  if (!pendingCapture) { hideReview(); return; }
-
-  const { type, url, mime, slowmo, mode: capMode } = pendingCapture;
-  const a = document.createElement('a');
-  a.href = url;
-
-  if (type === 'photo') {
-    a.download = `camshot-${capMode}-${Date.now()}.jpg`;
-    a.click();
-
-    const img = document.createElement('img');
-    img.src = url;
-    thumb.innerHTML = '';
-    thumb.appendChild(img);
-    showToast('Saved');
-  } else {
-    const ext = (mime || '').includes('mp4') ? 'mp4' : 'webm';
-    a.download = `camshot-${slowmo ? 'slowmo' : 'video'}-${Date.now()}.${ext}`;
-    a.click();
-
-    const v = document.createElement('video');
-    v.src = url;
-    v.muted = true;
-    v.playsInline = true;
-    v.autoplay = true;
-    v.loop = true;
-    v.playbackRate = slowmo ? 0.5 : 1;
-    thumb.innerHTML = '';
-    thumb.appendChild(v);
-    showToast(slowmo ? 'Slow motion saved 🐢' : 'Video saved 🎥');
-  }
-
-  pendingCapture = null;
-  hideReview();
-});
-
-/* ============================================================
-   AUTO-EXPOSURE — reads scene brightness and adjusts camera
-   ============================================================ */
-
-let autoExposureEnabled = true;
-let lastExposureTarget = null;
-let aeSampleCanvas = document.createElement('canvas');
-aeSampleCanvas.width = 32;
-aeSampleCanvas.height = 24;
-let aeSampleCtx = aeSampleCanvas.getContext('2d', { willReadFrequently: true });
-let aeInterval = null;
-
-function sampleSceneBrightness() {
-  if (video.readyState < 2 || video.videoWidth === 0) return null;
-  try {
-    aeSampleCtx.drawImage(video, 0, 0, aeSampleCanvas.width, aeSampleCanvas.height);
-    const d = aeSampleCtx.getImageData(0, 0, aeSampleCanvas.width, aeSampleCanvas.height).data;
-    let sum = 0;
-    for (let i = 0; i < d.length; i += 4) {
-      sum += 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-    }
-    return sum / (aeSampleCanvas.width * aeSampleCanvas.height); // 0..255
-  } catch { return null; }
-}
-
-async function tuneExposure() {
-  if (!track || !autoExposureEnabled) return;
-  const caps = track.getCapabilities?.() || {};
-  if (!caps.exposureCompensation) return;
-
-  const brightness = sampleSceneBrightness();
-  if (brightness === null) return;
-
-  const min = caps.exposureCompensation.min ?? -3;
-  const max = caps.exposureCompensation.max ?? 3;
-  const step = caps.exposureCompensation.step ?? 0.1;
-
-  // Target: pull brightness into a comfortable 100–150 range.
-  // Bright scene → negative EV. Dark scene → positive EV.
-  let target = 0;
-  if (brightness > 170)      target = -1.0;   // very bright → strong pull
-  else if (brightness > 140) target = -0.5;   // bright → medium pull
-  else if (brightness > 110) target = 0;      // balanced
-  else if (brightness > 80)  target = 0.5;    // dim → small lift
-  else                       target = 1.0;    // dark → strong lift
-
-  // Clamp to hardware limits
-  target = Math.max(min, Math.min(max, target));
-
-  // Quantize to step size
-  target = Math.round(target / step) * step;
-
-  // Only apply if it changed meaningfully (avoid thrashing)
-  if (lastExposureTarget !== null && Math.abs(target - lastExposureTarget) < step) return;
-   lastExposureTarget = target;
-
-  // Apply the user's manual offset on top of the auto target
-  const userOffset = lightingSettings?.brightnessEV || 0;
-  let finalTarget = target + userOffset;
-  finalTarget = Math.max(min, Math.min(max, finalTarget));
-  finalTarget = Math.round(finalTarget / step) * step;
-
-  try {
-    await track.applyConstraints({ advanced: [{ exposureCompensation: finalTarget }] });
-    console.log('Exposure →', finalTarget, 'EV (scene', Math.round(brightness) + ', auto', target, ', user', userOffset + ')');
-  } catch (e) {
-    // Silent
-  }
-}
-
-
-
-
-function startAutoExposure() {
-  stopAutoExposure();
-  // Sample every 800ms — fast enough to react, slow enough not to thrash
-  aeInterval = setInterval(tuneExposure, 800);
-}
-
-function stopAutoExposure() {
-  if (aeInterval) { clearInterval(aeInterval); aeInterval = null; }
-  lastExposureTarget = null;
-}
-
-function applyFlashToFrame(ctx, w, h) {
-  const power = flashSettings.power;
-  if (power <= 0) return;
-
-  // At 100% power, no extra brightening (the flash already lit the scene).
-  // At low power, gently lift the frame so it doesn't come out darker than
-  // the preview the user saw.
-  // power=100 → factor 1.0, power=1 → factor 1.15
-  const factor = 1.0 + (1 - power / 100) * 0.15;
-
-  // Color grade (only if the user picked warm or cool)
-  const t = Math.min(1, power / 100) * 0.5;
-  let rm = 1, gm = 1, bm = 1;
-  if (flashSettings.grade === 'warm') {
-    rm = 1 + 0.05 * t; gm = 1 + 0.01 * t; bm = 1 - 0.05 * t;
-  } else if (flashSettings.grade === 'cool') {
-    rm = 1 - 0.03 * t; gm = 1 + 0.005 * t; bm = 1 + 0.05 * t;
-  }
-  // neutral → rm/gm/bm stay 1
-
-  const img = ctx.getImageData(0, 0, w, h);
-  const d = img.data;
-
-  for (let i = 0; i < d.length; i += 4) {
-    let r = d[i]     * factor;
-    let g = d[i + 1] * factor;
-    let b = d[i + 2] * factor;
-
-    // Soft highlight rolloff so we don't clip
-    if (r > 210) r = 210 + (r - 210) * 0.5;
-    if (g > 210) g = 210 + (g - 210) * 0.5;
-    if (b > 210) b = 210 + (b - 210) * 0.5;
-
-    r *= rm; g *= gm; b *= bm;
-
-    d[i]     = Math.max(0, Math.min(255, r));
-    d[i + 1] = Math.max(0, Math.min(255, g));
-    d[i + 2] = Math.max(0, Math.min(255, b));
-  }
-  ctx.putImageData(img, 0, 0);
-}
-
-
-/* ============================================================
-   UI WIRING
-   ============================================================ */
-shutter.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  if (mode === 'video' || mode === 'slowmo') {
-    if (isRecording) stopRecording();
-    else startRecording();
-  } else {
-    capturePhoto();
-  }
-});
-
-shutter.addEventListener('keydown', (e) => {
-  if (e.key === ' ' || e.key === 'Enter') {
+// Drag and drop
+['dragenter', 'dragover'].forEach(ev => {
+  dropArea.addEventListener(ev, (e) => {
     e.preventDefault();
-    if (mode === 'video' || mode === 'slowmo') {
-      isRecording ? stopRecording() : startRecording();
-    } else {
-      capturePhoto();
-    }
-  }
-});
-
-
-let previousMode = 'photo';
-
-modes.forEach(m => {
-  m.addEventListener('pointerdown', async (e) => {
-    e.preventDefault(); e.stopPropagation();
-    const newMode = m.dataset.mode;
-
-    if ((mode === 'video' || mode === 'slowmo') && isRecording) stopRecording();
-
-    modes.forEach(x => x.classList.remove('active'));
-    m.classList.add('active');
-
-    previousMode = mode;
-    mode = newMode;
-
-    shutter.classList.remove('video', 'slowmo', 'recording');
-    if (mode === 'video')       shutter.classList.add('video');
-    else if (mode === 'slowmo') shutter.classList.add('slowmo');
-
-    // Slow-mo needs 60fps. Restart camera to request it.
-    // Leaving slow-mo back to normal frame rate also needs a restart.
-    const wasSlow = previousMode === 'slowmo';
-    const isSlow  = mode === 'slowmo';
-    if (wasSlow !== isSlow) {
-      await startCamera();
-    }
+    dropArea.classList.add('dragover');
   });
 });
-
-/* ============================================================
-   FLASH TOGGLE + LONG-PRESS POWER PANEL
-   ============================================================ */
-const flashPanel = document.getElementById('flashPanel');
-const flashClose = document.getElementById('flashClose');
-const flashDone = document.getElementById('flashDone');
-const flashReset = document.getElementById('flashReset');
-const flashPowerSlider = document.getElementById('flashPowerSlider');
-const flashPowerVal = document.getElementById('flashPowerVal');
-
-let longPressTimer = null;
-let longPressFired = false;
-
-// --- Tap: toggle flash on/off ---
-// --- Long press (600ms): open the power panel ---
-
-flashToggle.addEventListener('pointerdown', (e) => {
-  longPressFired = false;
-  longPressTimer = setTimeout(() => {
-    longPressFired = true;
-    openFlashPanel();
-    // Light haptic if supported
-    if (navigator.vibrate) navigator.vibrate(15);
-  }, 600);
-});
-
-flashToggle.addEventListener('pointerup', async (e) => {
-  clearTimeout(longPressTimer);
-  if (longPressFired) return;   // long press already opened the panel
-
-  // Normal tap → toggle flash
-  flashEnabled = !flashEnabled;
-  updateFlashUI();
-
-  if (!flashEnabled) {
-    if (track && hasTorch) await setTorch(false);
-    if (flashOverlay.classList.contains('on')) {
-      flashOverlay.classList.remove('on');
-      flashOverlay.style.opacity = '';
-      flashOverlay.style.transition = '';
-    }
-    return;
-  }
-
-  // Re-check torch capability on every toggle
-  if (track) {
-    const caps = track.getCapabilities?.() || {};
-    hasTorch = !!caps.torch;
-  }
-
-  if (hasTorch) {
-    showToast('Flash on · torch ready');
-  } else {
-    showToast('No hardware torch — screen flash will be used');
-  }
-});
-
-flashToggle.addEventListener('pointercancel', () => clearTimeout(longPressTimer));
-flashToggle.addEventListener('pointerleave', () => clearTimeout(longPressTimer));
-
-// --- Panel controls ---
-function openFlashPanel() {
-  flashPowerSlider.value = flashSettings.power;
-  flashPowerVal.textContent = flashSettings.power + '%';
-  flashPanel.classList.add('show');
-}
-
-flashClose.addEventListener('click', () => {
-  flashPanel.classList.remove('show');
-});
-
-flashDone.addEventListener('click', () => {
-  flashPanel.classList.remove('show');
-  showToast(`Flash power: ${flashSettings.power}%`);
-});
-
-flashReset.addEventListener('click', () => {
-  flashSettings.power = 100;
-  flashPowerSlider.value = 100;
-  flashPowerVal.textContent = '100%';
-});
-
-flashPowerSlider.addEventListener('input', () => {
-  flashSettings.power = parseInt(flashPowerSlider.value, 10);
-  flashPowerVal.textContent = flashSettings.power + '%';
-  updateFlashUI();   // update the toggle label if flash is on
-});
-flip.addEventListener('click', async () => {
-  if (isRecording) stopRecording();
-  facingMode = facingMode === 'user' ? 'environment' : 'user';
-  if (hasTorch) await setTorch(false);
-  await startCamera();
-});
-
-zoomBar.querySelectorAll('button').forEach(b => {
-  b.addEventListener('click', () => {
-    zoomBar.querySelectorAll('button').forEach(x => x.classList.remove('active'));
-    b.classList.add('active');
-    zoom = parseFloat(b.dataset.zoom);
-    applyZoom();
-    showToast(hardwareZoomSupported ? `Zoom ${zoom}×` : `Zoom ${zoom}× (digital)`, 900);
+['dragleave', 'drop'].forEach(ev => {
+  dropArea.addEventListener(ev, (e) => {
+    e.preventDefault();
+    dropArea.classList.remove('dragover');
   });
 });
-
-document.getElementById('editBtn').addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  if (!pendingCapture) return;
-
-  // Hand the image to the editor via sessionStorage.
-  // sessionStorage survives page navigation within the same tab.
-  try {
-    sessionStorage.setItem('camshot_edit_image', pendingCapture.url);
-    sessionStorage.setItem('camshot_edit_type', pendingCapture.type);
-    window.location.href = '/editor.html';
-  } catch (err) {
-    console.error('Could not open editor:', err);
-    showToast('Could not open editor — image too large?');
-  }
+dropArea.addEventListener('drop', (e) => {
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) openEditor(file);
 });
 
-/* ============================================================
-   SETTINGS PANEL — Lighting controls
-   ============================================================ */
-
-   // User-tunable lighting state
-let lightingSettings = {
-  autoExposure: true,
-  brightnessEV: 0,
-  contrast: 1
-};
-const settingsPanel = document.getElementById('settingsPanel');
-const settingsBtn = document.getElementById('settingsBtn');
-const settingsClose = document.getElementById('settingsClose');
-const settingsDone = document.getElementById('settingsDone');
-const lightingReset = document.getElementById('lightingReset');
-const aeSwitch = document.getElementById('aeSwitch');
-const brightnessSlider = document.getElementById('brightnessSlider');
-const brightnessVal = document.getElementById('brightnessVal');
-const contrastSlider = document.getElementById('contrastSlider');
-const contrastVal = document.getElementById('contrastVal');
-
-
-
-function updateAESwitch() {
-  aeSwitch.classList.toggle('on', lightingSettings.autoExposure);
+function openEditor(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      sessionStorage.setItem('rendar_image', reader.result);
+      window.location.href = '/editor.html';
+    } catch (err) {
+      alert('Image too large to load — try a smaller file.');
+    }
+  };
+  reader.readAsDataURL(file);
 }
-
-
-
-function applyLightingSettings() {
-  // Apply manual brightness offset to the camera's exposureCompensation
-  if (!track) return;
-  const caps = track.getCapabilities?.() || {};
-  if (!caps.exposureCompensation) return;
-
-  const min = caps.exposureCompensation.min ?? -3;
-  const max = caps.exposureCompensation.max ?? 3;
-  const step = caps.exposureCompensation.step ?? 0.1;
-
-  // If auto-exposure is on, use the AE target + user offset. If off, use just the user offset.
-  let target = lightingSettings.brightnessEV;
-  if (lightingSettings.autoExposure && lastExposureTarget !== null) {
-    target = lastExposureTarget + lightingSettings.brightnessEV;
-  }
-
-  target = Math.max(min, Math.min(max, target));
-  target = Math.round(target / step) * step;
-
-  track.applyConstraints({ advanced: [{ exposureCompensation: target }] }).catch(() => {});
-}
-
-settingsBtn.addEventListener('click', () => {
-  settingsPanel.classList.add('show');
-});
-
-settingsClose.addEventListener('click', () => {
-  settingsPanel.classList.remove('show');
-});
-
-settingsDone.addEventListener('click', () => {
-  settingsPanel.classList.remove('show');
-  showToast('Lighting updated');
-});
-
-aeSwitch.addEventListener('click', () => {
-  lightingSettings.autoExposure = !lightingSettings.autoExposure;
-  updateAESwitch();
-
-  if (lightingSettings.autoExposure) {
-    startAutoExposure();
-  } else {
-    stopAutoExposure();
-    // When AE is off, immediately apply the user's manual value
-    applyLightingSettings();
-  }
-});
-
-brightnessSlider.addEventListener('input', () => {
-  lightingSettings.brightnessEV = parseFloat(brightnessSlider.value);
-  brightnessVal.textContent = lightingSettings.brightnessEV.toFixed(1) + ' EV';
-  applyLightingSettings();
-});
-
-contrastSlider.addEventListener('input', () => {
-  lightingSettings.contrast = parseFloat(contrastSlider.value);
-  contrastVal.textContent = lightingSettings.contrast.toFixed(2) + '×';
-  // Contrast is applied in the capture pipeline, not live
-});
-
-lightingReset.addEventListener('click', () => {
-  lightingSettings = { autoExposure: true, brightnessEV: 0, contrast: 1 };
-  aeSwitch.classList.add('on');
-  brightnessSlider.value = 0;
-  brightnessVal.textContent = '0.0 EV';
-  contrastSlider.value = 1;
-  contrastVal.textContent = '1.00×';
-  startAutoExposure();
-  applyLightingSettings();
-  showToast('Lighting reset');
-});
-
-// Initial UI state
-
-updateAESwitch();
-updateFlashUI();
-startCamera();
 </script>
+
 </body>
 </html>

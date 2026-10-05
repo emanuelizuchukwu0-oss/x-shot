@@ -3,585 +3,919 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>CamShot Editor</title>
+<meta name="theme-color" content="#0a0a0c" />
+<title>Rendar — Editor</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  html, body { height: 100%; background: #0a0a0c; overflow: hidden; font-family: -apple-system, system-ui, sans-serif; color: #fff; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body { height: 100%; background: #0a0a0c; overflow: hidden; font-family: -apple-system, system-ui, sans-serif; color: #f5f5f7; }
 
-  .editor-shell {
-    display: flex; flex-direction: column;
+  .app {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    grid-template-columns: 1fr;
     height: 100%;
   }
 
   /* Top bar */
-  .editor-top {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 12px 16px;
-    padding-top: max(12px, env(safe-area-inset-top));
+  .topbar {
     background: #141416;
-    border-bottom: 1px solid rgba(255,255,255,.08);
+    border-bottom: 1px solid #23232a;
+    padding: 10px 16px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    display: flex; justify-content: space-between; align-items: center;
     z-index: 10;
   }
-  .editor-top button {
-    background: rgba(255,255,255,.08); border: none; color: #fff;
-    padding: 8px 14px; border-radius: 999px;
-    font-size: 12px; font-weight: 700; cursor: pointer;
-    touch-action: manipulation;
+  .topbar .left, .topbar .right {
+    display: flex; align-items: center; gap: 8px;
   }
-  .editor-top .save-btn { background: #ffb800; color: #000; }
-
-  /* Canvas area */
-  .editor-canvas-wrap {
-    flex: 1; position: relative;
-    overflow: hidden;
+  .brand-mini {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 800; font-size: 14px;
+    margin-right: 12px;
+  }
+  .brand-mini .mark {
+    width: 22px; height: 22px; border-radius: 5px;
+    background: linear-gradient(135deg, #00d4ff, #a78bfa);
+    color: #000; font-size: 12px; font-weight: 900;
     display: flex; align-items: center; justify-content: center;
-    background: #000;
-    touch-action: none;
   }
-  #editorCanvas {
-    max-width: 100%; max-height: 100%;
-    display: block;
-    touch-action: none;
-  }
-
-  /* Text overlay (invisible divs that hold editable text) */
-  .text-layer {
-    position: absolute; inset: 0;
-    pointer-events: none;
-  }
-  .text-layer.active { pointer-events: auto; }
-  .text-item {
-    position: absolute;
-    pointer-events: auto;
-    cursor: move;
-    padding: 4px 6px;
-    border: 2px dashed transparent;
-    white-space: pre;
-    user-select: none;
-    min-width: 20px;
-  }
-  .text-item.selected {
-    border-color: #ffb800;
-    background: rgba(255,184,0,.08);
-  }
-  .text-item.editing {
-    border-color: #00d4ff;
-    background: rgba(0,212,255,.08);
-    cursor: text;
-  }
-  .text-item.editing input,
-  .text-item.editing textarea {
-    background: transparent;
-    border: none;
-    outline: none;
-    color: inherit;
-    font: inherit;
-    padding: 0;
-    resize: none;
-    width: 100%;
-    min-width: 40px;
-  }
-
-  /* Tool bar */
-  .toolbar {
-    background: #141416;
-    border-top: 1px solid rgba(255,255,255,.08);
-    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-    display: flex; gap: 8px; overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .toolbar::-webkit-scrollbar { display: none; }
-
-  .tool {
-    flex-shrink: 0;
-    background: rgba(255,255,255,.08);
+  .tb-btn {
+    background: rgba(255,255,255,.06);
     border: 1px solid rgba(255,255,255,.08);
-    color: #fff;
-    padding: 10px 14px;
-    border-radius: 12px;
+    color: #f5f5f7;
+    padding: 8px 12px;
+    border-radius: 8px;
     font-size: 12px; font-weight: 700;
     cursor: pointer;
     touch-action: manipulation;
     display: flex; align-items: center; gap: 6px;
-    transition: all .15s;
   }
-  .tool.active {
-    background: #ffb800;
-    color: #000;
-    border-color: #ffb800;
+  .tb-btn:hover { background: rgba(255,255,255,.1); }
+  .tb-btn.primary {
+    background: #00d4ff; color: #000; border-color: #00d4ff;
+  }
+  .tb-btn.primary:hover { background: #22ddff; }
+  .tb-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Main 3-column layout */
+  .main {
+    display: grid;
+    grid-template-columns: 240px 1fr 260px;
+    overflow: hidden;
+    min-height: 0;
+  }
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; position: relative; }
   }
 
-  /* Bottom sub-panel — appears when a tool is active */
-  .subpanel {
+  /* Left panel — tools */
+  .panel {
     background: #141416;
-    border-top: 1px solid rgba(255,255,255,.08);
-    padding: 12px 16px;
-    display: none;
-    gap: 12px;
-    align-items: center;
+    border-right: 1px solid #23232a;
+    overflow-y: auto;
+    padding: 12px;
   }
-  .subpanel.show { display: flex; }
-  .subpanel input[type=range] {
-    flex: 1; accent-color: #ffb800;
+  .panel.right { border-right: none; border-left: 1px solid #23232a; }
+
+  @media (max-width: 900px) {
+    .panel {
+      position: absolute; top: 0; bottom: 0;
+      width: 240px;
+      transform: translateX(-100%);
+      transition: transform .25s;
+      z-index: 20;
+    }
+    .panel.right { right: 0; left: auto; transform: translateX(100%); }
+    .panel.open { transform: translateX(0); }
   }
-  .subpanel .val {
-    font-size: 12px; font-weight: 700; color: #ffb800;
-    min-width: 50px; text-align: right;
+
+  .panel-title {
+    font-size: 10px; font-weight: 800;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: #6a6a72;
+    margin: 8px 4px 10px;
   }
-  .subpanel .color-swatch {
-    width: 32px; height: 32px; border-radius: 50%;
-    border: 2px solid rgba(255,255,255,.3);
+
+  /* Tool buttons */
+  .tool-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .tool-btn {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.06);
+    color: #c5c5cc;
+    padding: 12px 8px;
+    border-radius: 10px;
+    font-size: 11px; font-weight: 700;
+    cursor: pointer;
+    touch-action: manipulation;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    transition: all .15s;
+    font-family: inherit;
+  }
+  .tool-btn .ico { font-size: 18px; line-height: 1; }
+  .tool-btn:hover { background: rgba(255,255,255,.08); }
+  .tool-btn.active {
+    background: rgba(0,212,255,.15);
+    border-color: #00d4ff;
+    color: #00d4ff;
+  }
+
+  /* Right panel — adjustments */
+  .adj-group { margin-bottom: 20px; }
+  .adj-label {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; font-weight: 700;
+    color: #a5a5ad;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  .adj-label .val {
+    color: #00d4ff; font-variant-numeric: tabular-nums;
+    font-size: 11px;
+  }
+  .adj-slider {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 3px;
+    background: rgba(255,255,255,.1);
+    border-radius: 999px;
+    outline: none;
     cursor: pointer;
   }
+  .adj-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #00d4ff;
+    cursor: pointer;
+    box-shadow: 0 0 0 3px rgba(0,212,255,.2);
+  }
+  .adj-slider::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #00d4ff; border: none; cursor: pointer;
+  }
 
-  /* Loading state */
-  .editor-loading {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    background: #000; color: #888; font-size: 14px;
-    z-index: 20;
+  /* Filters */
+  .filter-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .filter-btn {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.06);
+    color: #c5c5cc;
+    padding: 8px 4px;
+    border-radius: 8px;
+    font-size: 10px; font-weight: 700;
+    cursor: pointer;
+    touch-action: manipulation;
+    text-align: center;
+    font-family: inherit;
+  }
+  .filter-btn.active {
+    background: rgba(0,212,255,.15);
+    border-color: #00d4ff;
+    color: #00d4ff;
+  }
+
+  /* Canvas area */
+  .canvas-area {
+    position: relative;
+    background:
+      linear-gradient(45deg, #1a1a1d 25%, transparent 25%),
+      linear-gradient(-45deg, #1a1a1d 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #1a1a1d 75%),
+      linear-gradient(-45deg, transparent 75%, #1a1a1d 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, 10px 0px;
+    background-color: #0f0f11;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    touch-action: none;
+  }
+  #canvas {
+    max-width: 95%;
+    max-height: 95%;
+    box-shadow: 0 10px 60px rgba(0,0,0,.6);
+    touch-action: none;
+    cursor: default;
+  }
+  .canvas-hint {
+    position: absolute;
+    bottom: 16px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,.7);
+    color: #fff;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 11px;
+    backdrop-filter: blur(10px);
+    display: none;
+  }
+
+  /* Text overlay layer */
+  .text-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .text-item {
+    position: absolute;
+    pointer-events: auto;
+    padding: 4px 8px;
+    border: 1.5px dashed transparent;
+    cursor: move;
+    white-space: pre;
+    font-weight: 800;
+    text-shadow: 0 2px 8px rgba(0,0,0,.5);
+    touch-action: none;
+  }
+  .text-item.selected {
+    border-color: #00d4ff;
+    background: rgba(0,212,255,.08);
+  }
+  .text-item.editing {
+    border-color: #a78bfa;
+    background: rgba(167,139,250,.08);
+  }
+  .text-item input {
+    background: transparent;
+    border: none; outline: none;
+    color: inherit;
+    font: inherit;
+    padding: 0;
+    width: 100%;
+    min-width: 40px;
+  }
+
+  /* Mobile bottom toolbar */
+  .mobile-bar {
+    display: none;
+    background: #141416;
+    border-top: 1px solid #23232a;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    gap: 8px;
+    justify-content: center;
+  }
+  @media (max-width: 900px) {
+    .mobile-bar { display: flex; }
+  }
+  .mb-btn {
+    flex: 1;
+    max-width: 120px;
+    padding: 10px;
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.08);
+    color: #f5f5f7;
+    border-radius: 10px;
+    font-size: 11px; font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    touch-action: manipulation;
   }
 
   /* Empty state */
-  .editor-empty {
-    text-align: center; padding: 40px;
-    color: #666;
+  .empty {
+    position: absolute;
+    inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #0a0a0c;
+    text-align: center;
+    color: #6a6a72;
+    padding: 40px;
+    font-size: 14px;
+    line-height: 1.6;
+    z-index: 30;
   }
-  .editor-empty h2 { font-size: 18px; margin-bottom: 12px; color: #aaa; }
-  .editor-empty a { color: #ffb800; text-decoration: none; font-weight: 700; }
+  .empty a { color: #00d4ff; font-weight: 700; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 30px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,.9);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    z-index: 200;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .25s;
+  }
+  .toast.show { opacity: 1; }
 </style>
 </head>
 <body>
 
-<div class="editor-shell">
-  <div class="editor-top">
-    <button id="backBtn">← Back</button>
-    <button class="save-btn" id="saveBtn">Save Copy</button>
+<div class="app">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="left">
+      <a class="brand-mini" href="/">
+        <span class="mark">R</span>
+        <span>Rendar</span>
+      </a>
+      <button class="tb-btn" id="undoBtn" disabled>↶ Undo</button>
+      <button class="tb-btn" id="resetBtn">Reset</button>
+    </div>
+    <div class="right">
+      <button class="tb-btn" id="downloadBtn">↓ Download</button>
+    </div>
   </div>
 
-  <div class="editor-canvas-wrap" id="canvasWrap">
-    <div class="editor-loading" id="loading">Loading image…</div>
-    <canvas id="editorCanvas"></canvas>
-    <div class="text-layer" id="textLayer"></div>
+  <!-- Main -->
+  <div class="main">
+
+    <!-- Left panel -->
+    <aside class="panel left" id="leftPanel">
+      <div class="panel-title">Tools</div>
+      <div class="tool-grid">
+        <button class="tool-btn" data-tool="select"><span class="ico">👆</span>Select</button>
+        <button class="tool-btn" data-tool="text"><span class="ico">T</span>Text</button>
+        <button class="tool-btn" data-tool="erase"><span class="ico">⌫</span>Erase</button>
+        <button class="tool-btn" data-tool="crop"><span class="ico">✂</span>Crop</button>
+        <button class="tool-btn" data-tool="rotate"><span class="ico">↻</span>Rotate</button>
+        <button class="tool-btn" data-tool="flip"><span class="ico">⇋</span>Flip</button>
+      </div>
+
+      <div class="panel-title">Filters</div>
+      <div class="filter-grid" id="filterGrid">
+        <button class="filter-btn active" data-filter="none">None</button>
+        <button class="filter-btn" data-filter="bw">B&W</button>
+        <button class="filter-btn" data-filter="sepia">Sepia</button>
+        <button class="filter-btn" data-filter="vivid">Vivid</button>
+        <button class="filter-btn" data-filter="warm">Warm</button>
+        <button class="filter-btn" data-filter="cool">Cool</button>
+        <button class="filter-btn" data-filter="fade">Fade</button>
+        <button class="filter-btn" data-filter="noir">Noir</button>
+        <button class="filter-btn" data-filter="vintage">Vintage</button>
+      </div>
+    </aside>
+
+    <!-- Canvas -->
+    <div class="canvas-area" id="canvasArea">
+      <canvas id="canvas"></canvas>
+      <div class="text-layer" id="textLayer"></div>
+      <div class="canvas-hint" id="canvasHint"></div>
+      <div class="empty" id="emptyState" style="display:none;">
+        <div>
+          <div style="font-size:40px;margin-bottom:12px;">📷</div>
+          <div>No image loaded.</div>
+          <div style="margin-top:8px;">
+            <a href="/">Go to Rendar home</a> to upload one.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right panel -->
+    <aside class="panel right" id="rightPanel">
+      <div class="panel-title">Adjustments</div>
+
+      <div class="adj-group">
+        <div class="adj-label">Brightness <span class="val" id="vBrightness">0</span></div>
+        <input type="range" class="adj-slider" id="brightness" min="-100" max="100" value="0" />
+      </div>
+
+      <div class="adj-group">
+        <div class="adj-label">Contrast <span class="val" id="vContrast">0</span></div>
+        <input type="range" class="adj-slider" id="contrast" min="-100" max="100" value="0" />
+      </div>
+
+      <div class="adj-group">
+        <div class="adj-label">Saturation <span class="val" id="vSaturation">0</span></div>
+        <input type="range" class="adj-slider" id="saturation" min="-100" max="100" value="0" />
+      </div>
+
+      <div class="adj-group">
+        <div class="adj-label">Warmth <span class="val" id="vWarmth">0</span></div>
+        <input type="range" class="adj-slider" id="warmth" min="-100" max="100" value="0" />
+      </div>
+
+      <div class="adj-group">
+        <div class="adj-label">Blur <span class="val" id="vBlur">0</span></div>
+        <input type="range" class="adj-slider" id="blur" min="0" max="20" value="0" />
+      </div>
+
+      <div class="adj-group">
+        <div class="adj-label">Vignette <span class="val" id="vVignette">0</span></div>
+        <input type="range" class="adj-slider" id="vignette" min="0" max="100" value="0" />
+      </div>
+    </aside>
+
   </div>
 
-  <div class="subpanel" id="subpanel">
-    <label id="subpanelLabel">Adjust</label>
-    <input type="range" id="subpanelSlider" min="0" max="100" value="50" />
-    <span class="val" id="subpanelVal">50</span>
-    <button class="tool" id="subpanelReset" style="flex-shrink:0;">Reset</button>
+  <!-- Mobile bottom bar -->
+  <div class="mobile-bar">
+    <button class="mb-btn" id="openToolsBtn">🛠 Tools</button>
+    <button class="mb-btn" id="openAdjBtn">⚙ Adjust</button>
   </div>
 
-  <div class="toolbar" id="toolbar">
-    <button class="tool" data-tool="select">👆 Select</button>
-    <button class="tool" data-tool="text">T Text</button>
-    <button class="tool" data-tool="erase">⌫ Erase</button>
-    <button class="tool" data-tool="crop">✂ Crop</button>
-    <button class="tool" data-tool="brightness">☀ Bright</button>
-    <button class="tool" data-tool="contrast">◐ Contrast</button>
-    <button class="tool" data-tool="blur">◆ Blur BG</button>
-    <button class="tool" data-tool="undo">↶ Undo</button>
-  </div>
 </div>
-  <div class="toolbar" id="toolbar">
-    ...
-  </div>
-</div>
+
+<div class="toast" id="toast"></div>
 
 <script>
 /* ============================================================
-   EDITOR — with touch gestures (pinch, pan, drag)
+   RENDAR EDITOR
    ============================================================ */
 
-const canvas = document.getElementById('editorCanvas');
+const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
-const canvasWrap = document.getElementById('canvasWrap');
+const canvasArea = document.getElementById('canvasArea');
 const textLayer = document.getElementById('textLayer');
-const loading = document.getElementById('loading');
-const subpanel = document.getElementById('subpanel');
-const subpanelLabel = document.getElementById('subpanelLabel');
-const subpanelSlider = document.getElementById('subpanelSlider');
-const subpanelVal = document.getElementById('subpanelVal');
-const subpanelReset = document.getElementById('subpanelReset');
-const toolbar = document.getElementById('toolbar');
+const emptyState = document.getElementById('emptyState');
+const toast = document.getElementById('toast');
+const undoBtn = document.getElementById('undoBtn');
 
-let currentTool = 'select';
-let history = [];
-let baseImage = null;
+let originalImage = null;      // Image element of the source
+let historyStack = [];         // ImageData snapshots
 let textItems = [];
 let selectedText = null;
-let isDrawing = false;
-let erasePaths = [];
-let brushSize = 30;
+let currentTool = 'select';
+let currentFilter = 'none';
 
-// ---- View transform (pinch / pan) ----
-let view = { scale: 1, x: 0, y: 0 };
-let lastTouches = null;
+// Adjustments
+let adjustments = {
+  brightness: 0,
+  contrast: 0,
+  saturation: 0,
+  warmth: 0,
+  blur: 0,
+  vignette: 0
+};
 
-/* ============================================================
-   TOUCH GESTURES — pinch zoom, two-finger pan
-   ============================================================ */
-
-canvasWrap.addEventListener('touchstart', (e) => {
-  if (e.touches.length === 2) {
-    // Two fingers — start pinch/pan, cancel any drawing
-    isDrawing = false;
-    activeStroke = null;
-    lastTouches = {
-      dist: touchDist(e.touches),
-      mid: touchMid(e.touches),
-      scale: view.scale,
-      x: view.x,
-      y: view.y
-    };
-    e.preventDefault();
-  }
-}, { passive: false });
-
-canvasWrap.addEventListener('touchmove', (e) => {
-  if (e.touches.length === 2 && lastTouches) {
-    const dist = touchDist(e.touches);
-    const mid = touchMid(e.touches);
-    const ratio = dist / lastTouches.dist;
-
-    // New scale — clamp between 0.5x and 5x
-    const newScale = Math.max(0.5, Math.min(5, lastTouches.scale * ratio));
-    view.scale = newScale;
-
-    // Pan follows the midpoint
-    view.x = lastTouches.x + (mid.x - lastTouches.mid.x);
-    view.y = lastTouches.y + (mid.y - lastTouches.mid.y);
-
-    applyViewTransform();
-    e.preventDefault();
-  }
-}, { passive: false });
-
-canvasWrap.addEventListener('touchend', (e) => {
-  if (e.touches.length < 2) lastTouches = null;
-});
-
-function touchDist(touches) {
-  const dx = touches[0].clientX - touches[1].clientX;
-  const dy = touches[0].clientY - touches[1].clientY;
-  return Math.hypot(dx, dy);
-}
-function touchMid(touches) {
-  return {
-    x: (touches[0].clientX + touches[1].clientX) / 2,
-    y: (touches[0].clientY + touches[1].clientY) / 2
-  };
+/* ---------- Show toast ---------- */
+function showToast(msg, ms = 1600) {
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => toast.classList.remove('show'), ms);
 }
 
-function applyViewTransform() {
-  canvas.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
-  canvas.style.transformOrigin = 'center center';
-  textLayer.style.transform = canvas.style.transform;
-  textLayer.style.transformOrigin = 'center center';
-}
-
-// Double-tap resets the view
-let lastTapTime = 0;
-canvasWrap.addEventListener('touchend', (e) => {
-  if (e.touches.length > 0) return;
-  const now = Date.now();
-  if (now - lastTapTime < 300) {
-    view = { scale: 1, x: 0, y: 0 };
-    applyViewTransform();
-  }
-  lastTapTime = now;
-});
-
-/* ============================================================
-   LOAD IMAGE
-   ============================================================ */
-
+/* ---------- Load image from sessionStorage ---------- */
 function loadImage() {
-  const url = sessionStorage.getItem('camshot_edit_image');
+  const url = sessionStorage.getItem('rendar_image');
   if (!url) {
-    loading.innerHTML = '<div class="editor-empty"><h2>No image to edit</h2><p>Take a photo in <a href="/">CamShot</a> first, then tap Edit.</p></div>';
+    emptyState.style.display = 'flex';
     return;
   }
+  emptyState.style.display = 'none';
 
   const img = new Image();
   img.onload = () => {
-    baseImage = img;
+    originalImage = img;
+
+    // Size the canvas to the image
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
-    fitCanvas();
-    drawBase();
-    loading.style.display = 'none';
-    saveHistory();
+
+    fitCanvasToView();
+    redraw();
+    pushHistory();
   };
-  img.onerror = () => { loading.innerHTML = 'Failed to load image.'; };
+  img.onerror = () => {
+    emptyState.style.display = 'flex';
+  };
   img.src = url;
 }
 
-function fitCanvas() {
-  const wrapRect = canvasWrap.getBoundingClientRect();
+function fitCanvasToView() {
+  const areaRect = canvasArea.getBoundingClientRect();
   const ratio = canvas.width / canvas.height;
-  let w = wrapRect.width;
+  let w = areaRect.width * 0.95;
   let h = w / ratio;
-  if (h > wrapRect.height) {
-    h = wrapRect.height;
+  if (h > areaRect.height * 0.95) {
+    h = areaRect.height * 0.95;
     w = h * ratio;
   }
   canvas.style.width = w + 'px';
   canvas.style.height = h + 'px';
 }
 
-window.addEventListener('resize', fitCanvas);
+window.addEventListener('resize', fitCanvasToView);
 
-function drawBase() {
-  if (!baseImage) return;
+/* ---------- Redraw everything ---------- */
+function redraw() {
+  if (!originalImage) return;
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(baseImage, 0, 0);
-  redrawEraseOnly();
+  ctx.filter = 'none';
+  ctx.drawImage(originalImage, 0, 0);
+
+  // Apply pixel-level adjustments (brightness, contrast, saturation, warmth)
+  applyPixelAdjustments();
+
+  // Apply filter
+  applyFilterToCanvas();
+
+  // Apply blur (via CSS filter on a copy)
+  if (adjustments.blur > 0) {
+    const tmp = document.createElement('canvas');
+    tmp.width = canvas.width;
+    tmp.height = canvas.height;
+    tmp.getContext('2d').drawImage(canvas, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.filter = `blur(${adjustments.blur}px)`;
+    ctx.drawImage(tmp, 0, 0);
+    ctx.filter = 'none';
+  }
+
+  // Apply vignette
+  if (adjustments.vignette > 0) {
+    applyVignette();
+  }
 }
 
-function saveHistory() {
+function applyPixelAdjustments() {
+  const b = adjustments.brightness;
+  const c = adjustments.contrast;
+  const s = adjustments.saturation;
+  const w = adjustments.warmth;
+  if (b === 0 && c === 0 && s === 0 && w === 0) return;
+
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imgData.data;
+
+  // Precompute contrast factor
+  const contrastFactor = (259 * (c + 255)) / (255 * (259 - c));
+
+  for (let i = 0; i < d.length; i += 4) {
+    let r = d[i], g = d[i + 1], bl = d[i + 2];
+
+    // Brightness
+    if (b !== 0) {
+      r += b; g += b; bl += b;
+    }
+
+    // Contrast
+    if (c !== 0) {
+      r = contrastFactor * (r - 128) + 128;
+      g = contrastFactor * (g - 128) + 128;
+      bl = contrastFactor * (bl - 128) + 128;
+    }
+
+    // Saturation (grayscale mix)
+    if (s !== 0) {
+      const lum = 0.299 * r + 0.587 * g + 0.114 * bl;
+      const satFactor = 1 + s / 100;
+      r = lum + (r - lum) * satFactor;
+      g = lum + (g - lum) * satFactor;
+      bl = lum + (bl - lum) * satFactor;
+    }
+
+    // Warmth (shift R up / B down for warm, reverse for cool)
+    if (w !== 0) {
+      r += w * 0.3;
+      bl -= w * 0.3;
+    }
+
+    d[i]     = Math.max(0, Math.min(255, r));
+    d[i + 1] = Math.max(0, Math.min(255, g));
+    d[i + 2] = Math.max(0, Math.min(255, bl));
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+}
+
+function applyFilterToCanvas() {
+  if (currentFilter === 'none') return;
+
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imgData.data;
+
+  for (let i = 0; i < d.length; i += 4) {
+    let r = d[i], g = d[i + 1], b = d[i + 2];
+
+    switch (currentFilter) {
+      case 'bw': {
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = g = b = lum;
+        break;
+      }
+      case 'sepia': {
+        const nr = 0.393 * r + 0.769 * g + 0.189 * b;
+        const ng = 0.349 * r + 0.686 * g + 0.168 * b;
+        const nb = 0.272 * r + 0.534 * g + 0.131 * b;
+        r = nr; g = ng; b = nb;
+        break;
+      }
+      case 'vivid': {
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = lum + (r - lum) * 1.4;
+        g = lum + (g - lum) * 1.4;
+        b = lum + (b - lum) * 1.4;
+        // slight contrast
+        r = (r - 128) * 1.1 + 128;
+        g = (g - 128) * 1.1 + 128;
+        b = (b - 128) * 1.1 + 128;
+        break;
+      }
+      case 'warm': {
+        r = Math.min(255, r + 20);
+        b = Math.max(0, b - 15);
+        break;
+      }
+      case 'cool': {
+        r = Math.max(0, r - 15);
+        b = Math.min(255, b + 20);
+        break;
+      }
+      case 'fade': {
+        r = r * 0.85 + 40;
+        g = g * 0.85 + 40;
+        b = b * 0.85 + 40;
+        break;
+      }
+      case 'noir': {
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = g = b = lum;
+        r = (r - 128) * 1.4 + 128;
+        g = (g - 128) * 1.4 + 128;
+        b = (b - 128) * 1.4 + 128;
+        break;
+      }
+      case 'vintage': {
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = lum * 0.9 + r * 0.1;
+        g = lum * 0.85 + g * 0.15;
+        b = lum * 0.7 + b * 0.3;
+        r = Math.min(255, r + 15);
+        g = Math.min(255, g + 10);
+        break;
+      }
+    }
+
+    d[i]     = Math.max(0, Math.min(255, r));
+    d[i + 1] = Math.max(0, Math.min(255, g));
+    d[i + 2] = Math.max(0, Math.min(255, b));
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+}
+
+function applyVignette() {
+  const strength = adjustments.vignette / 100;
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const maxR = Math.hypot(cx, cy);
+
+  const grad = ctx.createRadialGradient(cx, cy, maxR * 0.4, cx, cy, maxR);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, `rgba(0,0,0,${strength * 0.85})`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+/* ---------- History (undo) ---------- */
+function pushHistory() {
   try {
-    const snap = canvas.toDataURL('image/png');
-    history.push({
-      snap,
-      erasePaths: JSON.parse(JSON.stringify(erasePaths)),
-      texts: textItems.map(t => ({
-        text: t.text, x: t.x, y: t.y,
-        fontSize: t.fontSize, color: t.color, fontFamily: t.fontFamily
-      }))
-    });
-    if (history.length > 20) history.shift();
-  } catch (e) { console.warn('History save failed:', e); }
+    const snap = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    historyStack.push(snap);
+    if (historyStack.length > 15) historyStack.shift();
+    undoBtn.disabled = historyStack.length <= 1;
+  } catch (e) {
+    console.warn('History failed:', e);
+  }
 }
 
-async function undo() {
-  if (history.length <= 1) return;
-  history.pop();
-  const prev = history[history.length - 1];
-  erasePaths = prev.erasePaths;
+function undo() {
+  if (historyStack.length <= 1) return;
+  historyStack.pop();
+  const prev = historyStack[historyStack.length - 1];
+  ctx.putImageData(prev, 0, 0);
+  undoBtn.disabled = historyStack.length <= 1;
+}
+
+undoBtn.addEventListener('click', undo);
+
+/* ---------- Reset ---------- */
+document.getElementById('resetBtn').addEventListener('click', () => {
+  adjustments = { brightness: 0, contrast: 0, saturation: 0, warmth: 0, blur: 0, vignette: 0 };
+  currentFilter = 'none';
+  document.querySelectorAll('.adj-slider').forEach(s => s.value = 0);
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === 'none'));
+  updateSliderLabels();
+  // Clear texts
   textLayer.innerHTML = '';
   textItems = [];
-  for (const t of prev.texts) {
-    createTextItem(t.text, t.x, t.y, t.fontSize, t.color, t.fontFamily, false);
-  }
-  const img = new Image();
-  img.onload = () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0);
-  };
-  img.src = prev.snap;
+  redraw();
+  pushHistory();
+  showToast('Reset');
+});
+
+/* ---------- Sliders ---------- */
+const sliders = {
+  brightness: document.getElementById('brightness'),
+  contrast: document.getElementById('contrast'),
+  saturation: document.getElementById('saturation'),
+  warmth: document.getElementById('warmth'),
+  blur: document.getElementById('blur'),
+  vignette: document.getElementById('vignette')
+};
+
+function updateSliderLabels() {
+  document.getElementById('vBrightness').textContent = adjustments.brightness;
+  document.getElementById('vContrast').textContent = adjustments.contrast;
+  document.getElementById('vSaturation').textContent = adjustments.saturation;
+  document.getElementById('vWarmth').textContent = adjustments.warmth;
+  document.getElementById('vBlur').textContent = adjustments.blur;
+  document.getElementById('vVignette').textContent = adjustments.vignette;
 }
 
-/* ============================================================
-   TOOLBAR
-   ============================================================ */
-
-toolbar.addEventListener('click', (e) => {
-  const btn = e.target.closest('.tool');
-  if (!btn) return;
-  const tool = btn.dataset.tool;
-
-  if (tool === 'undo') { undo(); return; }
-
-  toolbar.querySelectorAll('.tool').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
-  currentTool = tool;
-
-  subpanel.classList.remove('show');
-  textLayer.classList.remove('active');
-
-  if (tool === 'brightness' || tool === 'contrast' || tool === 'blur') {
-    subpanel.classList.add('show');
-    subpanelLabel.textContent = tool === 'brightness' ? 'Brightness'
-                             : tool === 'contrast' ? 'Contrast'
-                             : 'Blur Amount';
-    subpanelSlider.value = 50;
-    subpanelVal.textContent = 50;
-  }
-  if (tool === 'text') textLayer.classList.add('active');
+Object.keys(sliders).forEach(key => {
+  let debounceTimer = null;
+  sliders[key].addEventListener('input', (e) => {
+    adjustments[key] = parseInt(e.target.value, 10);
+    updateSliderLabels();
+    // Live redraw (debounced for performance)
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(redraw, 30);
+  });
+  sliders[key].addEventListener('change', () => {
+    redraw();
+    pushHistory();
+  });
 });
 
-subpanelSlider.addEventListener('input', () => {
-  subpanelVal.textContent = subpanelSlider.value;
+/* ---------- Filter buttons ---------- */
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter = btn.dataset.filter;
+    redraw();
+    pushHistory();
+  });
 });
 
-subpanelSlider.addEventListener('change', () => {
-  const val = parseInt(subpanelSlider.value, 10);
-  if (currentTool === 'brightness') applyBrightness((val - 50) / 50);
-  else if (currentTool === 'contrast') applyContrast((val - 50) / 50);
-  else if (currentTool === 'blur') applyBlur(val / 5);
-  saveHistory();
+/* ---------- Tool buttons ---------- */
+document.querySelectorAll('.tool-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tool = btn.dataset.tool;
+
+    if (tool === 'rotate') {
+      rotateCanvas(90);
+      return;
+    }
+    if (tool === 'flip') {
+      flipCanvas();
+      return;
+    }
+    if (tool === 'crop') {
+      // Simple center crop to 80% for now
+      cropCenter(0.8);
+      return;
+    }
+
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTool = tool;
+
+    if (tool === 'text') {
+      showToast('Tap anywhere on the image to add text');
+    } else if (tool === 'erase') {
+      showToast('Drag on the image to erase');
+    }
+  });
 });
 
-subpanelReset.addEventListener('click', () => {
-  subpanelSlider.value = 50;
-  subpanelVal.textContent = '50';
-  drawBase();
-  saveHistory();
-});
-
-function applyBrightness(amount) {
-  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const d = imgData.data;
-  const adj = Math.round(amount * 80);
-  for (let i = 0; i < d.length; i += 4) {
-    d[i]     = Math.min(255, Math.max(0, d[i]     + adj));
-    d[i + 1] = Math.min(255, Math.max(0, d[i + 1] + adj));
-    d[i + 2] = Math.min(255, Math.max(0, d[i + 2] + adj));
-  }
-  ctx.putImageData(imgData, 0, 0);
-}
-
-function applyContrast(amount) {
-  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const d = imgData.data;
-  const factor = (259 * (amount * 100 + 255)) / (255 * (259 - amount * 100));
-  for (let i = 0; i < d.length; i += 4) {
-    d[i]     = Math.min(255, Math.max(0, factor * (d[i]     - 128) + 128));
-    d[i + 1] = Math.min(255, Math.max(0, factor * (d[i + 1] - 128) + 128));
-    d[i + 2] = Math.min(255, Math.max(0, factor * (d[i + 2] - 128) + 128));
-  }
-  ctx.putImageData(imgData, 0, 0);
-}
-
-function applyBlur(px) {
+/* ---------- Rotate / Flip / Crop ---------- */
+function rotateCanvas(deg) {
   const tmp = document.createElement('canvas');
   tmp.width = canvas.width;
   tmp.height = canvas.height;
-  tmp.getContext('2d', { willReadFrequently: true }).drawImage(canvas, 0, 0);
+  tmp.getContext('2d').drawImage(canvas, 0, 0);
+
+  // Swap dimensions for 90/270
+  canvas.width = tmp.height;
+  canvas.height = tmp.width;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.filter = `blur(${px}px)`;
-  ctx.drawImage(tmp, 0, 0);
-  ctx.filter = 'none';
-  redrawEraseOnly();
-}
-
-function redrawEraseOnly() {
   ctx.save();
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  for (const stroke of erasePaths) {
-    ctx.lineWidth = stroke.size;
-    ctx.beginPath();
-    for (let i = 0; i < stroke.points.length; i++) {
-      const p = stroke.points[i];
-      if (i === 0) ctx.moveTo(p.x, p.y);
-      else ctx.lineTo(p.x, p.y);
-    }
-    ctx.stroke();
-  }
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(deg * Math.PI / 180);
+  ctx.drawImage(tmp, -tmp.width / 2, -tmp.height / 2);
   ctx.restore();
-}
 
-/* ============================================================
-   ERASE — finger drag wipes pixels
-   ============================================================ */
-
-let activeStroke = null;
-
-function pointerToCanvas(e) {
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  return {
-    x: (e.clientX - rect.left) * scaleX,
-    y: (e.clientY - rect.top) * scaleY
+  // Update original reference so subsequent edits work
+  const newImg = new Image();
+  newImg.onload = () => {
+    originalImage = newImg;
+    fitCanvasToView();
   };
+  newImg.src = canvas.toDataURL();
+
+  pushHistory();
+  showToast(`Rotated ${deg}°`);
 }
 
+function flipCanvas() {
+  const tmp = document.createElement('canvas');
+  tmp.width = canvas.width;
+  tmp.height = canvas.height;
+  tmp.getContext('2d').drawImage(canvas, 0, 0);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.scale(-1, 1);
+  ctx.drawImage(tmp, -canvas.width, 0);
+  ctx.restore();
+
+  const newImg = new Image();
+  newImg.onload = () => { originalImage = newImg; };
+  newImg.src = canvas.toDataURL();
+
+  pushHistory();
+  showToast('Flipped');
+}
+
+function cropCenter(factor) {
+  const newW = Math.round(canvas.width * factor);
+  const newH = Math.round(canvas.height * factor);
+  const sx = Math.round((canvas.width - newW) / 2);
+  const sy = Math.round((canvas.height - newH) / 2);
+
+  const tmp = document.createElement('canvas');
+  tmp.width = newW;
+  tmp.height = newH;
+  tmp.getContext('2d').drawImage(canvas, sx, sy, newW, newH, 0, 0, newW, newH);
+
+  canvas.width = newW;
+  canvas.height = newH;
+  ctx.drawImage(tmp, 0, 0);
+
+  const newImg = new Image();
+  newImg.onload = () => { originalImage = newImg; fitCanvasToView(); };
+  newImg.src = canvas.toDataURL();
+
+  pushHistory();
+  showToast('Cropped');
+}
+
+/* ---------- Text tool — tap to place ---------- */
 canvas.addEventListener('pointerdown', (e) => {
-  if (currentTool !== 'erase') return;
-  isDrawing = true;
-  canvas.setPointerCapture(e.pointerId);
-  const p = pointerToCanvas(e);
-  activeStroke = {
-    size: Math.max(20, canvas.width / 40),
-    points: [p]
-  };
-  erasePaths.push(activeStroke);
-  redrawEraseOnly();
+  if (currentTool !== 'text') return;
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width * canvas.width;
+  const y = (e.clientY - rect.top) / rect.height * canvas.height;
+  const dispX = e.clientX - textLayer.getBoundingClientRect().left;
+  const dispY = e.clientY - textLayer.getBoundingClientRect().top;
+
+  const item = createTextItem('Tap to edit', dispX, dispY, Math.max(20, canvas.width / 25));
+  startEditText(item);
 });
 
-canvas.addEventListener('pointermove', (e) => {
-  if (!isDrawing || currentTool !== 'erase' || !activeStroke) return;
-  activeStroke.points.push(pointerToCanvas(e));
-  redrawEraseOnly();
-});
-
-canvas.addEventListener('pointerup', () => {
-  if (isDrawing && currentTool === 'erase') {
-    isDrawing = false;
-    activeStroke = null;
-    saveHistory();
-  }
-});
-
-canvas.addEventListener('pointercancel', () => {
-  isDrawing = false;
-  activeStroke = null;
-});
-
-/* ============================================================
-   TEXT — tap to place, drag to move, double-tap to edit
-   ============================================================ */
-
-function createTextItem(text, x, y, fontSize, color, fontFamily, saveNow = true) {
+function createTextItem(text, x, y, fontSize) {
   const el = document.createElement('div');
   el.className = 'text-item';
   el.textContent = text;
   el.style.left = x + 'px';
   el.style.top = y + 'px';
-  el.style.fontSize = fontSize + 'px';
-  el.style.color = color;
-  el.style.fontFamily = fontFamily || 'system-ui';
-  el.style.fontWeight = '800';
-  el.style.textShadow = '0 2px 8px rgba(0,0,0,.5)';
+  el.style.fontSize = fontSize * (canvas.getBoundingClientRect().width / canvas.width) + 'px';
+  el.style.color = '#ffffff';
+  el.style.fontFamily = 'system-ui';
 
-  const item = {
-    el, text, x, y, fontSize, color, fontFamily,
-    get positions() { return { x: parseInt(el.style.left), y: parseInt(el.style.top) }; }
-  };
+  const item = { el, text, x, y, fontSize, color: '#ffffff' };
 
-  let dragging = false;
-  let dragStart = null;
-  let moved = false;
-
+  let dragging = false, dragStart = null, moved = false;
   el.addEventListener('pointerdown', (e) => {
-    if (currentTool !== 'text' && currentTool !== 'select') return;
     if (el.classList.contains('editing')) return;
-    dragging = true;
-    moved = false;
+    dragging = true; moved = false;
     dragStart = { x: e.clientX, y: e.clientY, l: parseInt(el.style.left), t: parseInt(el.style.top) };
     el.setPointerCapture(e.pointerId);
     selectTextItem(item);
     e.stopPropagation();
   });
-
   el.addEventListener('pointermove', (e) => {
     if (!dragging) return;
     const dx = e.clientX - dragStart.x;
     const dy = e.clientY - dragStart.y;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
     el.style.left = (dragStart.l + dx) + 'px';
-    el.style.top  = (dragStart.t + dy) + 'px';
+    el.style.top = (dragStart.t + dy) + 'px';
   });
-
   el.addEventListener('pointerup', () => {
     if (dragging) {
       dragging = false;
-      item.x = parseInt(el.style.left);
-      item.y = parseInt(el.style.top);
-      // If the user just tapped without moving, start editing
       if (!moved) startEditText(item);
-      else saveHistory();
     }
   });
 
   textLayer.appendChild(el);
   textItems.push(item);
-  if (saveNow) saveHistory();
   return item;
 }
 
@@ -592,69 +926,49 @@ function selectTextItem(item) {
 }
 
 function startEditText(item) {
-  item.el.classList.remove('selected');
   item.el.classList.add('editing');
-
-  const currentText = item.text;
+  const current = item.text;
   item.el.innerHTML = '';
   const input = document.createElement('input');
   input.type = 'text';
-  input.value = currentText;
-  input.style.color = item.color;
-  input.style.fontSize = item.fontSize + 'px';
+  input.value = current;
   item.el.appendChild(input);
   input.focus();
   input.select();
-
   function commit() {
-    const newText = input.value || 'Text';
-    item.text = newText;
-    item.el.textContent = newText;
+    const v = input.value || 'Text';
+    item.text = v;
+    item.el.textContent = v;
     item.el.classList.remove('editing');
-    saveHistory();
   }
-
   input.addEventListener('blur', commit);
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-    if (e.key === 'Escape') { input.value = currentText; input.blur(); }
   });
 }
 
-canvasWrap.addEventListener('pointerdown', (e) => {
-  if (currentTool !== 'text') return;
-  if (e.target !== canvas) return;
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-  const item = createTextItem('Text', x, y, Math.max(20, canvas.width / 25), '#ffffff', 'system-ui');
-  selectTextItem(item);
-  setTimeout(() => startEditText(item), 50);
-});
-
-/* ============================================================
-   SAVE
-   ============================================================ */
-
-document.getElementById('saveBtn').addEventListener('click', () => {
+/* ---------- Download ---------- */
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  // Composite: canvas + text items rendered on top
   const out = document.createElement('canvas');
   out.width = canvas.width;
   out.height = canvas.height;
   const octx = out.getContext('2d');
-
   octx.drawImage(canvas, 0, 0);
 
+  const textRect = textLayer.getBoundingClientRect();
   const canvasRect = canvas.getBoundingClientRect();
-  for (const t of textItems) {
-    const pos = t.positions;
-    const scaleX = canvas.width / canvasRect.width;
-    const scaleY = canvas.height / canvasRect.height;
-    const x = pos.x * scaleX;
-    const y = pos.y * scaleY;
-    const fontSize = t.fontSize * scaleY;
+  const scaleX = canvas.width / canvasRect.width;
+  const scaleY = canvas.height / canvasRect.height;
 
-    octx.font = `800 ${fontSize}px ${t.fontFamily}`;
-    octx.fillStyle = t.color;
+  for (const t of textItems) {
+    const elRect = t.el.getBoundingClientRect();
+    const x = (elRect.left - textRect.left) * scaleX;
+    const y = (elRect.top - textRect.top) * scaleY;
+    const fontSize = parseFloat(t.el.style.fontSize) * scaleY;
+
+    octx.font = `800 ${fontSize}px ${t.el.style.fontFamily || 'system-ui'}`;
+    octx.fillStyle = t.el.style.color || '#fff';
     octx.textBaseline = 'top';
     octx.shadowColor = 'rgba(0,0,0,.5)';
     octx.shadowBlur = fontSize * 0.1;
@@ -664,16 +978,24 @@ document.getElementById('saveBtn').addEventListener('click', () => {
   const url = out.toDataURL('image/jpeg', 0.92);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `camshot-edit-${Date.now()}.jpg`;
+  a.download = `rendar-${Date.now()}.jpg`;
   a.click();
+  showToast('Downloaded');
 });
 
-document.getElementById('backBtn').addEventListener('click', () => {
-  sessionStorage.removeItem('camshot_edit_image');
-  window.location.href = '/';
+/* ---------- Mobile panel toggles ---------- */
+document.getElementById('openToolsBtn').addEventListener('click', () => {
+  document.getElementById('leftPanel').classList.toggle('open');
+  document.getElementById('rightPanel').classList.remove('open');
+});
+document.getElementById('openAdjBtn').addEventListener('click', () => {
+  document.getElementById('rightPanel').classList.toggle('open');
+  document.getElementById('leftPanel').classList.remove('open');
 });
 
+/* ---------- Init ---------- */
 loadImage();
+updateSliderLabels();
 </script>
 </body>
 </html>
